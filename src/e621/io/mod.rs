@@ -85,10 +85,7 @@ impl Config {
         let mut config: Config = from_str(&read_to_string(CONFIG_NAME).unwrap())?;
         config.naming_convention = config.naming_convention.to_lowercase();
         let convention = ["md5", "id"];
-        if !convention
-            .iter()
-            .any(|e| *e == config.naming_convention.as_str())
-        {
+        if !convention.contains(&config.naming_convention.as_str()) {
             error!(
                 "There is no naming convention {}!",
                 config.naming_convention
@@ -147,7 +144,7 @@ impl Login {
     /// Gets the global instance of [Login].
     pub(crate) fn get() -> &'static Self {
         LOGIN.get_or_init(|| Self::load().unwrap_or_else(|e| {
-            error!("Unable to load `login.json`. Error: {}", e);
+            error!("Unable to load `login.json`. Error: {e}");
             warn!("The program will use default values, but it is highly recommended to check your login.json file to \
 			       ensure that everything is correct.");
             Login::default()

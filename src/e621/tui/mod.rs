@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-
 use std::time::Duration;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
-/// A builder that helps in making a new [ProgressStyle] for use.
+/// A builder that helps in making a new [`ProgressStyle`] for use.
 pub(crate) struct ProgressStyleBuilder {
-    /// The [ProgressStyle] being built.
+    /// The [`ProgressStyle`] being built.
     progress_style: ProgressStyle,
 }
 
@@ -32,7 +31,7 @@ impl ProgressStyleBuilder {
     ///
     /// * `msg_template`: The template to use.
     ///
-    /// returns: ProgressStyleBuilder
+    /// returns: `ProgressStyleBuilder`
     pub(crate) fn template(mut self, msg_template: &str) -> Self {
         self.progress_style = self.progress_style.template(msg_template).unwrap();
         self
@@ -44,13 +43,13 @@ impl ProgressStyleBuilder {
     ///
     /// * `chars`: Progress chars to use.
     ///
-    /// returns: ProgressStyleBuilder
+    /// returns: `ProgressStyleBuilder`
     pub(crate) fn progress_chars(mut self, chars: &str) -> Self {
         self.progress_style = self.progress_style.progress_chars(chars);
         self
     }
 
-    /// Builds and returns the new [ProgressStyle].
+    /// Builds and returns the new [`ProgressStyle`].
     pub(crate) fn build(self) -> ProgressStyle {
         self.progress_style
     }
@@ -64,9 +63,9 @@ impl Default for ProgressStyleBuilder {
     }
 }
 
-/// A builder that helps in initializing and configuring a new [ProgressBar] for use.
+/// A builder that helps in initializing and configuring a new [`ProgressBar`] for use.
 pub(crate) struct ProgressBarBuilder {
-    /// The [ProgressBar] to build.
+    /// The [`ProgressBar`] to build.
     pub(crate) progress_bar: ProgressBar,
 }
 
@@ -77,7 +76,7 @@ impl ProgressBarBuilder {
     ///
     /// * `len`: Total length of the progress bar.
     ///
-    /// returns: ProgressBarBuilder
+    /// returns: `ProgressBarBuilder`
     pub(crate) fn new(len: u64) -> Self {
         Self {
             progress_bar: ProgressBar::new(len),
@@ -90,7 +89,7 @@ impl ProgressBarBuilder {
     ///
     /// * `progress_style`: The style to set the progress bar to.
     ///
-    /// returns: ProgressBarBuilder
+    /// returns: `ProgressBarBuilder`
     pub(crate) fn style(self, progress_style: ProgressStyle) -> Self {
         self.progress_bar.set_style(progress_style);
         self
@@ -102,7 +101,7 @@ impl ProgressBarBuilder {
     ///
     /// * `target`: The output draw target.
     ///
-    /// returns: ProgressBarBuilder
+    /// returns: `ProgressBarBuilder`
     pub(crate) fn draw_target(self, target: ProgressDrawTarget) -> Self {
         self.progress_bar.set_draw_target(target);
         self
@@ -120,7 +119,7 @@ impl ProgressBarBuilder {
     ///
     /// * `duration`: Steady tick duration.
     ///
-    /// returns: ProgressBarBuilder
+    /// returns: `ProgressBarBuilder`
     pub(crate) fn steady_tick(self, duration: Duration) -> Self {
         self.progress_bar.enable_steady_tick(duration);
         self

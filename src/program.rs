@@ -18,12 +18,12 @@ use std::env::current_dir;
 use std::fs::write;
 use std::path::Path;
 
-use console::Term;
 use anyhow::Error;
+use console::Term;
 
 use crate::e621::E621WebConnector;
-use crate::e621::io::{Config, emergency_exit, Login};
-use crate::e621::io::tag::{parse_tag_file, TAG_FILE_EXAMPLE, TAG_NAME};
+use crate::e621::io::tag::{TAG_FILE_EXAMPLE, TAG_NAME, parse_tag_file};
+use crate::e621::io::{Config, Login, emergency_exit};
 use crate::e621::sender::RequestSender;
 
 /// The name of the cargo package.
@@ -48,9 +48,9 @@ impl Program {
     pub(crate) fn run(&self) -> Result<(), Error> {
         Term::stdout().set_title("e621 downloader");
         trace!("Starting e621 downloader...");
-        trace!("Program Name: {}", NAME);
-        trace!("Program Version: {}", VERSION);
-        trace!("Program Authors: {}", AUTHORS);
+        trace!("Program Name: {NAME}");
+        trace!("Program Version: {VERSION}");
+        trace!("Program Authors: {AUTHORS}");
         trace!(
             "Program Working Directory: {}",
             current_dir()
@@ -72,7 +72,7 @@ impl Program {
         if !Path::new(TAG_NAME).exists() {
             info!("Tag file does not exist, creating tag file...");
             write(TAG_NAME, TAG_FILE_EXAMPLE)?;
-            trace!("Tag file \"{}\" created...", TAG_NAME);
+            trace!("Tag file \"{TAG_NAME}\" created...");
 
             emergency_exit(
                 "The tag file is created, the application will close so you can include \
@@ -96,11 +96,11 @@ impl Program {
         let groups = parse_tag_file(&request_sender)?;
 
         // Collects all grabbed posts and moves it to connector to start downloading.
-        if !login.is_empty() {
+        if login.is_empty() {
+            trace!("Skipping blacklist as user is not logged in...");
+        } else {
             trace!("Parsing user blacklist...");
             connector.process_blacklist();
-        } else {
-            trace!("Skipping blacklist as user is not logged in...");
         }
 
         connector.grab_all(&groups);

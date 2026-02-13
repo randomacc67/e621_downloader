@@ -14,26 +14,25 @@
  * limitations under the License.
  */
 
-
 use std::cmp::Ordering;
 
 use anyhow::Context;
 
 use crate::e621::io::parser::BaseParser;
-use crate::e621::sender::entries::{PostEntry, UserEntry};
 use crate::e621::sender::RequestSender;
+use crate::e621::sender::entries::{PostEntry, UserEntry};
 
 /// Root token which contains all the tokens of the blacklist.
 #[derive(Default, Debug)]
 struct RootToken {
-    /// The total [LineToken]s from the root.
+    /// The total [`LineToken`]s from the root.
     lines: Vec<LineToken>,
 }
 
 /// A line token that contains all collected [`TagToken`]s from a parsed line.
 #[derive(Debug, Default)]
 struct LineToken {
-    /// Total [TagToken] in the line.
+    /// Total [`TagToken`] in the line.
     tags: Vec<TagToken>,
 }
 
@@ -56,7 +55,7 @@ enum Rating {
     Explicit,
 }
 
-/// A enum that contains what type the [TagToken] is.
+/// A enum that contains what type the [`TagToken`] is.
 ///
 /// The tag can be seen as four types: [Rating](TagType::Rating), [Id](TagType::Id), [User](TagType::User), and
 /// [None](TagType::None).
@@ -175,13 +174,13 @@ impl BlacklistParser {
     ///
     /// # Arguments
     ///
-    /// * `token`: The special [TagToken] to parse.
+    /// * `token`: The special [`TagToken`] to parse.
     ///
     /// returns: ()
     ///
     /// # Errors
     ///
-    /// An error can occur if 1) the `assert_eq` fails in its check or 2) if the [TagToken] name is not any of the matched
+    /// An error can occur if 1) the `assert_eq` fails in its check or 2) if the [`TagToken`] name is not any of the matched
     /// values.
     fn parse_special_tag(&mut self, token: &mut TagToken) {
         assert_eq!(self.base_parser.consume_char(), ':');
@@ -204,17 +203,14 @@ impl BlacklistParser {
             "score" => {
                 let ordering = self.get_ordering();
                 let score = self.base_parser.consume_while(valid_score);
-                token.tag_type = TagType::Score(
-                    ordering,
-                    score.parse::<i32>().unwrap(),
-                );
+                token.tag_type = TagType::Score(ordering, score.parse::<i32>().unwrap());
             }
             _ => {
                 self.base_parser.report_error(
                     format!("Unknown special tag identifier: {}", token.name).as_str(),
                 );
             }
-        };
+        }
     }
 
     /// Checks the value and create a new [Rating] from it.
@@ -239,7 +235,7 @@ impl BlacklistParser {
         match order.as_str() {
             "<" => Ordering::Less,
             ">=" => Ordering::Greater, // This is greater than or equal, but ordering has no combination for that.
-            _ => Ordering::Equal // Defaults to equal (e.g nothing happens).
+            _ => Ordering::Equal,      // Defaults to equal (e.g nothing happens).
         }
     }
 }
@@ -378,7 +374,7 @@ impl FlagWorker {
     /// * `rating`: The blacklisted rating.
     /// * `post`: The post to check against.
     /// * `negated`: Whether the blacklisted rating is negated or not (this will determine if the rating whitelists the
-    /// post or adds towards removing it from the download pool).
+    ///   post or adds towards removing it from the download pool).
     fn flag_rating(&mut self, rating: &Rating, post: &PostEntry, negated: bool) {
         // A nice tuple hack to get around some massive nesting.
         match (rating, post.rating.as_str()) {
@@ -396,7 +392,7 @@ impl FlagWorker {
     /// * `id`: The blacklisted id to compare.
     /// * `post_id`: The post id to check against.
     /// * `negated`: Whether the blacklisted rating is negated or not (this will determine if the rating whitelists the
-    /// post or adds towards removing it from the download pool).
+    ///   post or adds towards removing it from the download pool).
     fn flag_id(&mut self, id: i64, post_id: i64, negated: bool) {
         if post_id == id {
             self.raise_flag(negated);
@@ -410,7 +406,7 @@ impl FlagWorker {
     /// * `user_id`: The blacklisted user id.
     /// * `uploader_id`: The user id to check against.
     /// * `negated`: Whether the blacklisted rating is negated or not (this will determine if the rating whitelists the
-    /// post or adds towards removing it from the download pool).
+    ///   post or adds towards removing it from the download pool).
     fn flag_user(&mut self, user_id: i64, uploader_id: i64, negated: bool) {
         if user_id == uploader_id {
             self.raise_flag(negated);
@@ -427,12 +423,12 @@ impl FlagWorker {
     fn flag_score(&mut self, ordering: &Ordering, score: &i32, post_score: i64, negated: bool) {
         match ordering {
             Ordering::Less => {
-                if post_score < *score as i64 {
+                if post_score < i64::from(*score) {
                     self.raise_flag(negated);
                 }
             }
             Ordering::Greater => {
-                if post_score >= *score as i64 {
+                if post_score >= i64::from(*score) {
                     self.raise_flag(negated);
                 }
             }

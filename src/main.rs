@@ -65,12 +65,12 @@ fn initialize_logger() {
 /// Logs important information about the system being used.
 fn log_system_information() {
     trace!("Printing system information out into log for debug purposes...");
-    trace!("ARCH:           \"{}\"", ARCH);
-    trace!("DLL_EXTENSION:  \"{}\"", DLL_EXTENSION);
-    trace!("DLL_PREFIX:     \"{}\"", DLL_PREFIX);
-    trace!("DLL_SUFFIX:     \"{}\"", DLL_SUFFIX);
-    trace!("EXE_EXTENSION:  \"{}\"", EXE_EXTENSION);
-    trace!("EXE_SUFFIX:     \"{}\"", EXE_SUFFIX);
-    trace!("FAMILY:         \"{}\"", FAMILY);
-    trace!("OS:             \"{}\"", OS);
+    trace!("ARCH:           \"{ARCH}\"");
+    trace!("DLL_EXTENSION:  \"{DLL_EXTENSION}\"");
+    trace!("DLL_PREFIX:     \"{DLL_PREFIX}\"");
+    trace!("DLL_SUFFIX:     \"{DLL_SUFFIX}\"");
+    trace!("EXE_EXTENSION:  \"{EXE_EXTENSION}\"");
+    trace!("EXE_SUFFIX:     \"{EXE_SUFFIX}\"");
+    trace!("FAMILY:         \"{FAMILY}\"");
+    trace!("OS:             \"{OS}\"");
 }

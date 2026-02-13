@@ -127,8 +127,7 @@ impl BaseParser {
         );
         trace!(
             "Total characters: {}, total columns: {}",
-            self.total_len,
-            self.total_columns
+            self.total_len, self.total_columns
         );
 
         emergency_exit("Parser error encountered.");

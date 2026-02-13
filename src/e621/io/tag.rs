@@ -20,8 +20,8 @@ use anyhow::{Context, Error};
 
 use crate::e621::io::emergency_exit;
 use crate::e621::io::parser::BaseParser;
-use crate::e621::sender::entries::TagEntry;
 use crate::e621::sender::RequestSender;
+use crate::e621::sender::entries::TagEntry;
 
 /// Constant of the tag file's name.
 pub(crate) const TAG_NAME: &str = "tags.txt";
@@ -207,7 +207,7 @@ impl TagIdentifier {
         // If returning the last element fails, assume the tag is syntax only and default.
         map.find(|e| e.search_type == TagSearchType::Special)
             .unwrap_or_else(|| {
-                map.last()
+                map.next_back()
                     .unwrap_or_else(|| Tag::new(tags, TagSearchType::General, TagType::General))
             })
     }
@@ -220,21 +220,12 @@ impl TagIdentifier {
     ///
     /// returns: Option<TagEntry>
     fn get_tag_from_alias(&self, tag: &str) -> Option<TagEntry> {
-        let entry = match self.request_sender.query_aliases(tag) {
-            Some(e) => e.first().unwrap().clone(),
-            None => {
-                return None;
-            }
-        };
+        let entry = self.request_sender.query_aliases(tag)?.first()?.clone();
 
-        // Is there possibly a way to make this better?
-        Some(
-            self.request_sender
-                .get_tags_by_name(&entry.consequent_name)
-                .first()
-                .unwrap()
-                .clone(),
-        )
+        self.request_sender
+            .get_tags_by_name(&entry.consequent_name)
+            .first()
+            .cloned()
     }
 
     /// Emergency exits if a tag isn't identified.
@@ -365,9 +356,10 @@ impl TagParser {
             }
             e => {
                 let temp_char = self.parser.next_char();
-                if !char::is_ascii_digit(&temp_char) && temp_char != '#' {
-                    panic!("Invalid tag type! Pools, sets, and single-post tags must be a number!");
-                }
+                assert!(
+                    char::is_ascii_digit(&temp_char) || temp_char == '#',
+                    "Invalid tag type! Pools, sets, and single-post tags must be a number!"
+                );
 
                 let tag = self.parser.consume_while(valid_id);
                 let tag_type = match e {

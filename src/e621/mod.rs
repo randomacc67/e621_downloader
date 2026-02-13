@@ -28,8 +28,8 @@ use crate::e621::blacklist::Blacklist;
 use crate::e621::grabber::{Grabber, Shorten};
 use crate::e621::io::tag::Group;
 use crate::e621::io::{Config, Login};
-use crate::e621::sender::entries::UserEntry;
 use crate::e621::sender::RequestSender;
+use crate::e621::sender::entries::UserEntry;
 use crate::e621::tui::{ProgressBarBuilder, ProgressStyleBuilder};
 
 pub(crate) mod blacklist;
@@ -38,7 +38,7 @@ pub(crate) mod io;
 pub(crate) mod sender;
 pub(crate) mod tui;
 
-/// A web connector that manages how the API is called (through the [RequestSender]), how posts are grabbed
+/// A web connector that manages how the API is called (through the [`RequestSender`]), how posts are grabbed
 /// (through [Grabber]), and how the posts are downloaded.
 pub(crate) struct E621WebConnector {
     /// The sender used for all API calls.
@@ -92,15 +92,15 @@ impl E621WebConnector {
         let user: UserEntry = self
             .request_sender
             .get_entry_from_appended_id(username, "user");
-        if let Some(blacklist_tags) = user.blacklisted_tags {
-            if !blacklist_tags.is_empty() {
-                let blacklist = self.blacklist.clone();
-                blacklist
-                    .borrow_mut()
-                    .parse_blacklist(blacklist_tags)
-                    .cache_users();
-                self.grabber.set_blacklist(blacklist);
-            }
+        if let Some(blacklist_tags) = user.blacklisted_tags
+            && !blacklist_tags.is_empty()
+        {
+            let blacklist = self.blacklist.clone();
+            blacklist
+                .borrow_mut()
+                .parse_blacklist(blacklist_tags)
+                .cache_users();
+            self.grabber.set_blacklist(blacklist);
         }
     }
 
@@ -146,7 +146,7 @@ impl E621WebConnector {
 
     /// Processes `PostSet` and downloads all posts from it.
     fn download_collection(&mut self) {
-        for collection in self.grabber.posts().iter() {
+        for collection in self.grabber.posts() {
             let collection_name = collection.name();
             let collection_category = collection.category();
             let collection_posts = collection.posts();
@@ -191,8 +191,10 @@ impl E621WebConnector {
 
                 let new_len = static_path.as_os_str().len();
                 if new_len >= MAX_PATH {
-                    error!("Path is too long and crosses the {MAX_PATH} char limit.\
-                       Please relocate the program to a directory closer to the root drive directory.");
+                    error!(
+                        "Path is too long and crosses the {MAX_PATH} char limit.\
+                       Please relocate the program to a directory closer to the root drive directory."
+                    );
                     trace!("Path length: {new_len}");
                 }
             }
