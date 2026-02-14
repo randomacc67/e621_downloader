@@ -1,3 +1,5 @@
+## Note: This fork primarily exists to fix bugs in the original project. There is no guarantee that this will be maintained if the original project becomes active again.
+
 # E621 Downloader
 ![Release](https://img.shields.io/github/release/McSib/e621_downloader.svg)
 ![Commits Since](https://img.shields.io/github/commits-since/McSib/e621_downloader/latest.svg)
