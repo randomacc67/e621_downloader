@@ -312,7 +312,7 @@ fn valid_ordering(c: char) -> bool {
 ///
 /// returns: bool
 fn valid_score(c: char) -> bool {
-    c.is_ascii_digit()
+    c.is_ascii_digit() || c == '-'
 }
 
 /// Validates character for id.
