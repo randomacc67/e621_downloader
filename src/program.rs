@@ -86,6 +86,10 @@ impl Program {
         trace!("Login Username: {}", login.username());
         trace!("Login API Key: {}", "*".repeat(login.api_key().len()));
         trace!("Login Download Favorites: {}", login.download_favorites());
+        trace!(
+            "Login Ignore Blacklist On Favorites: {}",
+            login.ignore_blacklist_on_favorites()
+        );
 
         let request_sender = RequestSender::new();
         let mut connector = E621WebConnector::new(&request_sender);

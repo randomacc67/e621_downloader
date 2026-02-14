@@ -108,19 +108,26 @@ impl Default for Config {
     }
 }
 
+fn default_true() -> bool {
+    true
+}
+
 /// `Login` contains all login information for obtaining information about a certain user.
 /// This is currently only used for the blacklist.
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct Login {
     /// Username of user.
-    #[serde(rename = "Username")]
+    #[serde(rename = "Username", default)]
     username: String,
     /// The password hash (also known as the API key) for the user.
-    #[serde(rename = "APIKey")]
+    #[serde(rename = "APIKey", default)]
     api_key: String,
     /// Whether or not the user wishes to download their favorites.
-    #[serde(rename = "DownloadFavorites")]
+    #[serde(rename = "DownloadFavorites", default = "default_true")]
     download_favorites: bool,
+    /// Whether or not the user wishes to ignore the blacklist when downloading favorites.
+    #[serde(rename = "IgnoreBlacklistOnFavorites", default = "default_true")]
+    ignore_blacklist_on_favorites: bool,
 }
 
 static LOGIN: OnceCell<Login> = OnceCell::new();
@@ -141,24 +148,46 @@ impl Login {
         self.download_favorites
     }
 
+    /// Whether or not the user wishes to ignore the blacklist when downloading favorites.
+    pub(crate) fn ignore_blacklist_on_favorites(&self) -> bool {
+        self.ignore_blacklist_on_favorites
+    }
+
     /// Gets the global instance of [Login].
     pub(crate) fn get() -> &'static Self {
-        LOGIN.get_or_init(|| Self::load().unwrap_or_else(|e| {
-            error!("Unable to load `login.json`. Error: {e}");
-            warn!("The program will use default values, but it is highly recommended to check your login.json file to \
+        LOGIN.get_or_init(|| {
+            Self::load().unwrap_or_else(|e| {
+                error!("Unable to load `login.json`. Error: {e}");
+                warn!("The program will use default values, but it is highly recommended to check your login.json file to \
 			       ensure that everything is correct.");
-            Login::default()
-        }))
+                Login::default()
+            })
+        })
     }
 
     /// Loads the login file or creates one if it doesn't exist.
     fn load() -> Result<Self, Error> {
-        let mut login = Login::default();
         let login_path = Path::new(LOGIN_NAME);
-        if login_path.exists() {
-            login = from_str(&read_to_string(login_path)?)?;
-        } else {
+        if !login_path.exists() {
+            let login = Login::default();
             login.create_login()?;
+            return Ok(login);
+        }
+
+        let content = read_to_string(login_path)?;
+        let login: Login = from_str(&content)?;
+
+        let expected_keys = [
+            "Username",
+            "APIKey",
+            "DownloadFavorites",
+            "IgnoreBlacklistOnFavorites",
+        ];
+        if expected_keys.iter().any(|key| !content.contains(key)) {
+            warn!(
+                "The login.json file was missing some options and has been updated with default values."
+            );
+            login.save_to_file()?;
         }
 
         Ok(login)
@@ -173,9 +202,16 @@ impl Login {
         false
     }
 
+    /// Saves the login to the login file.
+    fn save_to_file(&self) -> Result<(), Error> {
+        write(LOGIN_NAME, to_string_pretty(self)?)?;
+
+        Ok(())
+    }
+
     /// Creates a new login file.
     fn create_login(&self) -> Result<(), Error> {
-        write(LOGIN_NAME, to_string_pretty(self)?)?;
+        self.save_to_file()?;
 
         info!("The login file was created.");
         info!(
@@ -198,6 +234,7 @@ impl Default for Login {
             username: String::new(),
             api_key: String::new(),
             download_favorites: true,
+            ignore_blacklist_on_favorites: true,
         }
     }
 }

@@ -309,7 +309,20 @@ impl Grabber {
         let login = Login::get();
         if !login.username().is_empty() && login.download_favorites() {
             let tag = format!("fav:{}", login.username());
+
+            let ignore_blacklist = login.ignore_blacklist_on_favorites();
+            let original_blacklist = if ignore_blacklist {
+                self.blacklist.take()
+            } else {
+                None
+            };
+
             let posts = self.search(&tag, &TagSearchType::Special);
+
+            if ignore_blacklist {
+                self.blacklist = original_blacklist;
+            }
+
             self.posts
                 .push(PostCollection::new(&tag, "", GrabbedPost::new_vec(posts)));
             info!(
