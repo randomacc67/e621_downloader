@@ -212,13 +212,14 @@ impl RequestSender {
         trace!("Url where error occurred: {:#?}", error.url());
 
         if let Some(status) = error.status() {
-            let code = status.as_u16();
-            trace!("The response code from the server was: {code}");
-
             const SERVER_INTERNAL: u16 = 500;
             const SERVER_RATE_LIMIT: u16 = 503;
             const CLIENT_FORBIDDEN: u16 = 403;
             const CLIENT_THROTTLED: u16 = 421;
+
+            let code = status.as_u16();
+            trace!("The response code from the server was: {code}");
+
             match code {
                 SERVER_INTERNAL => {
                     error!(
@@ -281,7 +282,8 @@ impl RequestSender {
     /// returns: Vec<u8, Global>
     pub(crate) fn download_image(&self, url: &str, file_size: i64) -> Vec<u8> {
         let mut image_response = self.check_response(self.client.get(url).send());
-        let mut image_bytes: Vec<u8> = Vec::with_capacity(file_size as usize);
+        let mut image_bytes: Vec<u8> =
+            Vec::with_capacity(usize::try_from(file_size).expect("Something went wrong."));
         image_response
             .copy_to(&mut image_bytes)
             .with_context(|| "Failed to download image!".to_string())

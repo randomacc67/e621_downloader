@@ -88,7 +88,13 @@ impl NewVec<(Vec<PostEntry>, &str)> for GrabbedPost {
     fn new_vec((vec, pool_name): (Vec<PostEntry>, &str)) -> Vec<Self> {
         vec.iter()
             .enumerate()
-            .map(|(i, e)| GrabbedPost::from((e, pool_name, (i + 1) as u16)))
+            .map(|(i, e)| {
+                GrabbedPost::from((
+                    e,
+                    pool_name,
+                    u16::try_from(i + 1).expect("Something went wrong."),
+                ))
+            })
             .collect()
     }
 }
@@ -367,7 +373,7 @@ impl Grabber {
             warn!(
                 "Post with ID {} has no URL!",
                 console::style(format!("\"{id}\"")).color256(39).italic()
-            )
+            );
         } else {
             let grabbed_post = GrabbedPost::from((entry, Config::get().naming_convention()));
             self.single_post_collection().posts.push(grabbed_post);

@@ -53,7 +53,9 @@ impl Program {
         trace!("Program Authors: {AUTHORS}");
         trace!(
             "Program Working Directory: {:?}",
-            current_dir().context("Unable to get working directory!")?
+            current_dir()
+                .context("Unable to get working directory!")?
+                .display()
         );
 
         // Check the config file and ensures that it is created.

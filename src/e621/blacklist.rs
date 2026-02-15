@@ -432,7 +432,7 @@ impl FlagWorker {
                     self.raise_flag(negated);
                 }
             }
-            _ => {}
+            Ordering::Equal => {}
         }
     }
 

@@ -92,9 +92,9 @@ impl Config {
     /// Loads and returns `config` for quick management and settings.
     fn load_config() -> Result<Self, Error> {
         let config_str = read_to_string(CONFIG_NAME)
-            .context(format!("Failed to read config file: {}", CONFIG_NAME))?;
-        let mut config: Config = from_str(&config_str)
-            .context(format!("Failed to parse config file: {}", CONFIG_NAME))?;
+            .context(format!("Failed to read config file: {CONFIG_NAME}"))?;
+        let mut config: Config =
+            from_str(&config_str).context(format!("Failed to parse config file: {CONFIG_NAME}"))?;
         config.naming_convention = config.naming_convention.to_lowercase();
         let convention = ["md5", "id"];
         if !convention.contains(&config.naming_convention.as_str()) {

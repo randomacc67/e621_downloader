@@ -219,7 +219,7 @@ impl E621WebConnector {
                 if file_path.exists() {
                     self.progress_bar
                         .set_message("Duplicate found: skipping... ");
-                    self.progress_bar.inc(post.file_size() as u64);
+                    self.progress_bar.inc(post.file_size().cast_unsigned());
                     continue;
                 }
 
@@ -241,7 +241,7 @@ impl E621WebConnector {
                     .request_sender
                     .download_image(post.url(), post.file_size());
                 self.save_image(file_path.to_str().unwrap(), &bytes);
-                self.progress_bar.inc(post.file_size() as u64);
+                self.progress_bar.inc(post.file_size().cast_unsigned());
             }
 
             trace!("Collection {collection_name} is finished downloading...");
@@ -281,7 +281,12 @@ impl E621WebConnector {
         self.grabber
             .posts()
             .iter()
-            .map(|e| e.posts().iter().map(|f| f.file_size() as u64).sum::<u64>())
+            .map(|e| {
+                e.posts()
+                    .iter()
+                    .map(|f| f.file_size().cast_unsigned())
+                    .sum::<u64>()
+            })
             .sum()
     }
 }
