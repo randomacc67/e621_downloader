@@ -18,7 +18,7 @@ use std::env::current_dir;
 use std::fs::write;
 use std::path::Path;
 
-use anyhow::Error;
+use anyhow::{Context, Error};
 use console::Term;
 
 use crate::e621::E621WebConnector;
@@ -52,11 +52,8 @@ impl Program {
         trace!("Program Version: {VERSION}");
         trace!("Program Authors: {AUTHORS}");
         trace!(
-            "Program Working Directory: {}",
-            current_dir()
-                .expect("Unable to get working directory!")
-                .to_str()
-                .unwrap()
+            "Program Working Directory: {:?}",
+            current_dir().context("Unable to get working directory!")?
         );
 
         // Check the config file and ensures that it is created.
@@ -66,6 +63,9 @@ impl Program {
             info!("Creating config file...");
             Config::create_config()?;
         }
+
+        Config::initialize()?;
+        trace!("Config initialized...");
 
         // Create tag if it doesn't exist.
         trace!("Checking if tag file exists...");
@@ -81,6 +81,7 @@ impl Program {
         }
 
         // Creates connector and requester to prepare for downloading posts.
+        Login::initialize()?;
         let login = Login::get();
         trace!("Login information loaded...");
         trace!("Login Username: {}", login.username());

@@ -19,7 +19,7 @@ use std::io;
 use std::path::Path;
 use std::process::exit;
 
-use anyhow::Error;
+use anyhow::{Context, Error};
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string_pretty};
@@ -77,21 +77,31 @@ impl Config {
 
     /// Get the global instance of the `Config`.
     pub(crate) fn get() -> &'static Self {
-        CONFIG.get_or_init(|| Self::get_config().unwrap())
+        CONFIG.get().expect("Config has not been initialized!")
+    }
+
+    /// Initializes the global `Config` instance.
+    pub(crate) fn initialize() -> Result<(), Error> {
+        let config = Self::load_config()?;
+        CONFIG
+            .set(config)
+            .map_err(|_| anyhow::anyhow!("Config has already been initialized!"))?;
+        Ok(())
     }
 
     /// Loads and returns `config` for quick management and settings.
-    fn get_config() -> Result<Self, Error> {
-        let mut config: Config = from_str(&read_to_string(CONFIG_NAME).unwrap())?;
+    fn load_config() -> Result<Self, Error> {
+        let config_str = read_to_string(CONFIG_NAME)
+            .context(format!("Failed to read config file: {}", CONFIG_NAME))?;
+        let mut config: Config = from_str(&config_str)
+            .context(format!("Failed to parse config file: {}", CONFIG_NAME))?;
         config.naming_convention = config.naming_convention.to_lowercase();
         let convention = ["md5", "id"];
         if !convention.contains(&config.naming_convention.as_str()) {
-            error!(
-                "There is no naming convention {}!",
+            return Err(anyhow::anyhow!(
+                "Invalid naming convention: {}. Must be one of: [\"md5\", \"id\"]",
                 config.naming_convention
-            );
-            info!("The naming convention can only be [\"md5\", \"id\"]");
-            emergency_exit("Naming convention is incorrect!");
+            ));
         }
 
         Ok(config)
@@ -155,14 +165,26 @@ impl Login {
 
     /// Gets the global instance of [Login].
     pub(crate) fn get() -> &'static Self {
-        LOGIN.get_or_init(|| {
-            Self::load().unwrap_or_else(|e| {
+        LOGIN.get().expect("Login has not been initialized!")
+    }
+
+    /// Initializes the global `Login` instance.
+    pub(crate) fn initialize() -> Result<(), Error> {
+        let login = match Self::load() {
+            Ok(login) => login,
+            Err(e) => {
                 error!("Unable to load `login.json`. Error: {e}");
-                warn!("The program will use default values, but it is highly recommended to check your login.json file to \
-			       ensure that everything is correct.");
+                warn!(
+                    "The program will use default values, but it is highly recommended to check your login.json file to \
+			       ensure that everything is correct."
+                );
                 Login::default()
-            })
-        })
+            }
+        };
+        LOGIN
+            .set(login)
+            .map_err(|_| anyhow::anyhow!("Login has already been initialized!"))?;
+        Ok(())
     }
 
     /// Loads the login file or creates one if it doesn't exist.
