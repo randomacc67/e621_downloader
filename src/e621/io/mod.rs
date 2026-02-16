@@ -18,9 +18,9 @@ use std::fs::{read_to_string, write};
 use std::io;
 use std::path::Path;
 use std::process::exit;
+use std::sync::OnceLock;
 
 use anyhow::{Context, Error};
-use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string_pretty};
 
@@ -44,7 +44,7 @@ pub(crate) struct Config {
     naming_convention: String,
 }
 
-static CONFIG: OnceCell<Config> = OnceCell::new();
+static CONFIG: OnceLock<Config> = OnceLock::new();
 
 impl Config {
     /// The location of the download directory.
@@ -140,7 +140,7 @@ pub(crate) struct Login {
     ignore_blacklist_on_favorites: bool,
 }
 
-static LOGIN: OnceCell<Login> = OnceCell::new();
+static LOGIN: OnceLock<Login> = OnceLock::new();
 
 impl Login {
     /// Username of user.
