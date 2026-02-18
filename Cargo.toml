@@ -6,13 +6,10 @@ edition = "2024"
 
 [dependencies]
 # These are added to fix security vulnerabilities.
-regex = "1.12.3"
 smallvec = "1.15.1"
 tokio = "1.49.0"
 rustls = "0.21.12"
 h2 = "0.3.27"
-bumpalo = "3.19.1"
-remove_dir_all = "0.8.4"
 
 base64-url = "2.0.2"
 indicatif = "0.17.11"
