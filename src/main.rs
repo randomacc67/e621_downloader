@@ -22,7 +22,7 @@ use std::env::consts::{
 };
 use std::fs::File;
 
-use anyhow::Error;
+use anyhow::{Context, Error};
 use log::LevelFilter;
 use simplelog::{
     ColorChoice, CombinedLogger, Config, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
@@ -34,7 +34,7 @@ mod e621;
 mod program;
 
 fn main() -> Result<(), Error> {
-    initialize_logger();
+    initialize_logger()?;
     log_system_information();
 
     let program = Program::new();
@@ -42,7 +42,7 @@ fn main() -> Result<(), Error> {
 }
 
 /// Initializes the logger with preset filtering.
-fn initialize_logger() {
+fn initialize_logger() -> Result<(), Error> {
     let mut config = ConfigBuilder::new();
     config.add_filter_allow_str("e621_downloader");
 
@@ -56,10 +56,12 @@ fn initialize_logger() {
         WriteLogger::new(
             LevelFilter::max(),
             config.build(),
-            File::create("e621_downloader.log").unwrap(),
+            File::create("e621_downloader.log").context("Failed to create log file!")?,
         ),
     ])
-    .unwrap();
+    .context("Failed to initialize logger!")?;
+
+    Ok(())
 }
 
 /// Logs important information about the system being used.

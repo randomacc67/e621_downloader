@@ -74,7 +74,9 @@ impl BaseParser {
     /// Returns current char and pushes `self.pos` to the next char.
     pub(crate) fn consume_char(&mut self) -> char {
         let mut iter = self.get_current_input().char_indices();
-        let (_, cur_char) = iter.next().unwrap();
+        let (_, cur_char) = iter
+            .next()
+            .expect("Attempted to consume character at end of input!");
         let (next_pos, next_char) = iter.next().unwrap_or((1, ' '));
 
         // If next char is a newline, increment the column count.
@@ -88,7 +90,10 @@ impl BaseParser {
 
     /// Read the current char without consuming it.
     pub(crate) fn next_char(&mut self) -> char {
-        self.get_current_input().chars().next().unwrap()
+        self.get_current_input()
+            .chars()
+            .next()
+            .expect("Attempted to read next character at end of input!")
     }
 
     /// Checks if the current input starts with the given string.
