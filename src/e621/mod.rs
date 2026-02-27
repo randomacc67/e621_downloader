@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Duration;
 
-use anyhow::Context;
+use anyhow::{Context, Error};
 use dialoguer::Confirm;
 use indicatif::{ProgressBar, ProgressDrawTarget};
 
@@ -66,7 +66,7 @@ impl E621WebConnector {
     }
 
     /// Gets input and enters safe depending on user choice.
-    pub(crate) fn should_enter_safe_mode(&mut self) {
+    pub(crate) fn should_enter_safe_mode(&mut self) -> Result<(), Error> {
         trace!("Prompt for safe mode...");
         let confirm_prompt = Confirm::new()
             .with_prompt("Should enter safe mode?")
@@ -76,14 +76,15 @@ impl E621WebConnector {
             .with_context(|| {
                 error!("Failed to setup confirmation prompt!");
                 "Terminal unable to set up confirmation prompt..."
-            })
-            .unwrap();
+            })?;
 
         trace!("Safe mode decision: {confirm_prompt}");
         if confirm_prompt {
             self.request_sender.update_to_safe();
             self.grabber.set_safe_mode(true);
         }
+
+        Ok(())
     }
 
     /// Processes the blacklist and tokenizes for use when grabbing posts.
@@ -117,14 +118,13 @@ impl E621WebConnector {
     }
 
     /// Saves image to download directory.
-    fn save_image(&self, file_path: &str, bytes: &[u8]) {
-        write(file_path, bytes)
-            .with_context(|| {
-                error!("Failed to save image!");
-                "A downloaded image was unable to be saved..."
-            })
-            .unwrap();
+    fn save_image(&self, file_path: &str, bytes: &[u8]) -> Result<(), Error> {
+        write(file_path, bytes).with_context(|| {
+            error!("Failed to save image!");
+            "A downloaded image was unable to be saved..."
+        })?;
         trace!("Saved {file_path}...");
+        Ok(())
     }
 
     /// Removes invalid characters from directory path.
@@ -145,7 +145,7 @@ impl E621WebConnector {
     }
 
     /// Processes `PostSet` and downloads all posts from it.
-    fn download_collection(&mut self) {
+    fn download_collection(&mut self) -> Result<(), Error> {
         for collection in self.grabber.posts() {
             let collection_name = collection.name();
             let collection_category = collection.category();
@@ -205,16 +205,16 @@ impl E621WebConnector {
             trace!("Collection Post Length:     \"{collection_count}\"");
             trace!(
                 "Static file path for this collection: \"{}\"",
-                static_path.to_str().unwrap()
+                static_path.to_string_lossy()
             );
 
             for post in collection_posts {
-                let file_path: PathBuf = [
-                    &static_path.to_str().unwrap().to_string(),
-                    &self.remove_invalid_chars(post.name()),
-                ]
-                .iter()
-                .collect();
+                let static_path_str = static_path
+                    .to_str()
+                    .context("Path contains invalid UTF-8")?;
+                let file_path: PathBuf = [static_path_str, &self.remove_invalid_chars(post.name())]
+                    .iter()
+                    .collect();
 
                 if file_path.exists() {
                     self.progress_bar
@@ -226,26 +226,33 @@ impl E621WebConnector {
                 self.progress_bar
                     .set_message(format!("Downloading: {short_collection_name} "));
 
-                let parent_path = file_path.parent().unwrap();
-                create_dir_all(parent_path)
-                    .with_context(|| {
-                        error!("Could not create directories for images!");
-                        format!(
-                            "Directory path unable to be created...\nPath: \"{}\"",
-                            parent_path.to_str().unwrap()
-                        )
-                    })
-                    .unwrap();
+                let parent_path = file_path
+                    .parent()
+                    .context("Failed to get parent directory")?;
+                create_dir_all(parent_path).with_context(|| {
+                    error!("Could not create directories for images!");
+                    format!(
+                        "Directory path unable to be created...\nPath: \"{}\"",
+                        parent_path.to_string_lossy()
+                    )
+                })?;
 
                 let bytes = self
                     .request_sender
                     .download_image(post.url(), post.file_size());
-                self.save_image(file_path.to_str().unwrap(), &bytes);
+                self.save_image(
+                    file_path
+                        .to_str()
+                        .context("File path contains invalid UTF-8")?,
+                    &bytes,
+                )?;
                 self.progress_bar.inc(post.file_size().cast_unsigned());
             }
 
             trace!("Collection {collection_name} is finished downloading...");
         }
+
+        Ok(())
     }
 
     /// Initializes the progress bar for downloading process.
@@ -267,13 +274,14 @@ impl E621WebConnector {
     }
 
     /// Downloads tuple of general posts and single posts.
-    pub(crate) fn download_posts(&mut self) {
+    pub(crate) fn download_posts(&mut self) -> Result<(), Error> {
         // Initializes the progress bar for downloading.
         let length = self.get_total_file_size();
         trace!("Total file size for all images grabbed is {length}KB");
         self.initialize_progress_bar(length);
-        self.download_collection();
+        let result = self.download_collection();
         self.progress_bar.finish_and_clear();
+        result
     }
 
     /// Gets the total size (in KB) of every post image to be downloaded.

@@ -109,7 +109,7 @@ impl From<(&PostEntry, &str, u16)> for GrabbedPost {
     /// returns: `GrabbedPost`
     fn from((post, name, current_page): (&PostEntry, &str, u16)) -> Self {
         GrabbedPost {
-            url: post.file.url.clone().unwrap(),
+            url: post.file.url.clone().expect("Post URL is missing!"),
             name: format!("{} Page_{:05}.{}", name, current_page, post.file.ext),
             file_size: post.file.size,
         }
@@ -127,12 +127,12 @@ impl From<(PostEntry, &str)> for GrabbedPost {
     fn from((post, name_convention): (PostEntry, &str)) -> Self {
         match name_convention {
             "md5" => GrabbedPost {
-                url: post.file.url.clone().unwrap(),
+                url: post.file.url.clone().expect("Post URL is missing!"),
                 name: format!("{}.{}", post.file.md5, post.file.ext),
                 file_size: post.file.size,
             },
             "id" => GrabbedPost {
-                url: post.file.url.clone().unwrap(),
+                url: post.file.url.clone().expect("Post URL is missing!"),
                 name: format!("{}.{}", post.id, post.file.ext),
                 file_size: post.file.size,
             },
@@ -511,7 +511,10 @@ impl Grabber {
     fn sort_pool_by_id(entry: &PoolEntry, posts: &mut [PostEntry]) {
         for (i, id) in entry.post_ids.iter().enumerate() {
             if posts[i].id != *id {
-                let correct_index = posts.iter().position(|e| e.id == *id).unwrap();
+                let correct_index = posts
+                    .iter()
+                    .position(|e| e.id == *id)
+                    .expect("Post ID from PoolEntry not found in PostEntry list!");
                 posts.swap(i, correct_index);
             }
         }
