@@ -93,15 +93,10 @@ impl Config {
     fn load_config() -> Result<Self, Error> {
         let config_str = read_to_string(CONFIG_NAME)
             .context(format!("Failed to read config file: {CONFIG_NAME}"))?;
-        let mut config: Config =
+        let config: Config =
             from_str(&config_str).context(format!("Failed to parse config file: {CONFIG_NAME}"))?;
-        config.naming_convention = config.naming_convention.to_lowercase();
-        let convention = ["md5", "id"];
-        if !convention.contains(&config.naming_convention.as_str()) {
-            return Err(anyhow::anyhow!(
-                "Invalid naming convention: {}. Must be one of: [\"md5\", \"id\"]",
-                config.naming_convention
-            ));
+        if config.naming_convention.is_empty() {
+            return Err(anyhow::anyhow!("Naming convention cannot be empty!"));
         }
 
         Ok(config)

@@ -20,7 +20,7 @@ use std::rc::Rc;
 
 use crate::e621::blacklist::Blacklist;
 use crate::e621::io::tag::{Group, Tag, TagSearchType, TagType};
-use crate::e621::io::{Config, Login, emergency_exit};
+use crate::e621::io::{Config, Login};
 use crate::e621::sender::RequestSender;
 use crate::e621::sender::entries::{PoolEntry, PostEntry, SetEntry};
 
@@ -125,25 +125,30 @@ impl From<(PostEntry, &str)> for GrabbedPost {
     ///
     /// returns: `GrabbedPost`
     fn from((post, name_convention): (PostEntry, &str)) -> Self {
-        match name_convention {
-            "md5" => GrabbedPost {
-                url: post.file.url.clone().expect("Post URL is missing!"),
-                name: format!("{}.{}", post.file.md5, post.file.ext),
-                file_size: post.file.size,
-            },
-            "id" => GrabbedPost {
-                url: post.file.url.clone().expect("Post URL is missing!"),
-                name: format!("{}.{}", post.id, post.file.ext),
-                file_size: post.file.size,
-            },
-            _ => {
-                emergency_exit("Incorrect naming convention!");
-                GrabbedPost {
-                    url: String::new(),
-                    name: String::new(),
-                    file_size: 0,
-                }
-            }
+        let name = if name_convention.eq_ignore_ascii_case("md5") {
+            format!("{}.{}", post.file.md5, post.file.ext)
+        } else if name_convention.eq_ignore_ascii_case("id") {
+            format!("{}.{}", post.id, post.file.ext)
+        } else {
+            let mut name = name_convention.to_string();
+            name = name.replace("{id}", &post.id.to_string());
+            name = name.replace("{md5}", &post.file.md5);
+            name = name.replace("{artist}", &post.tags.artist.join(" "));
+            name = name.replace("{characters}", &post.tags.character.join(" "));
+            name = name.replace("{copyright}", &post.tags.copyright.join(" "));
+            name = name.replace("{species}", &post.tags.species.join(" "));
+            name = name.replace("{general}", &post.tags.general.join(" "));
+            name = name.replace("{meta}", &post.tags.meta.join(" "));
+            name = name.replace("{lore}", &post.tags.lore.join(" "));
+            name = name.replace("{rating}", &post.rating);
+
+            format!("{}.{}", name, post.file.ext)
+        };
+
+        GrabbedPost {
+            url: post.file.url.clone().expect("Post URL is missing!"),
+            name,
+            file_size: post.file.size,
         }
     }
 }

@@ -69,6 +69,32 @@ git clone https://github.com/McSib/e621_downloader.git
 # Installation Guide (Debian)
 1. This is very much like the Arch Linux setup with some minor tweaks to the package download command. Instead of the pacman command, enter: `sudo apt install gcc g++ gdb cargo libssl-dev git` and then follow step 2 from the Arch Linux installation forward.
 
+# Configuration
+The program uses a `config.json` file for general settings. This file is automatically created the first time you run the application.
+
+### `config.json` Options:
+- `downloadDirectory`: The directory where all posts will be saved (default: `"downloads/"`).
+- `fileNamingConvention`: How the downloaded files should be named.
+
+### Custom Naming Convention
+As of version **1.8.0**, you can use custom templates for naming your files. You can include placeholders in brackets `{}` which will be replaced by the post's information.
+
+**Supported Placeholders:**
+- `{id}`: The unique ID of the post.
+- `{md5}`: The MD5 hash of the file.
+- `{artist}`: The artist(s) who created the work.
+- `{characters}`: Characters tagged in the post.
+- `{copyright}`: The series or copyright tagged.
+- `{species}`: Species tagged.
+- `{general}`: General tags.
+- `{rating}`: The post's rating (`s`, `q`, or `e`).
+
+**Legacy Support:**
+You can still use `"md5"` or `"id"` to use the original naming schemes.
+
+**Example:**
+`"fileNamingConvention": "{artist}-{id}"` will result in filenames like `mcsib-123456.png`.
+
 # FAQ
 
 ### Why does the program only grab only 1,280 posts with certain tags?
