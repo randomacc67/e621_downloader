@@ -153,51 +153,17 @@ impl E621WebConnector {
             let collection_count = collection_posts.len();
             let short_collection_name = collection.shorten("...");
 
-            #[cfg(unix)]
+            let base_dir = create_dir_all(&self.download_directory)
+                .and_then(|_| dunce::canonicalize(&self.download_directory))
+                .unwrap_or_else(|_| PathBuf::from(&self.download_directory));
+
             let static_path: PathBuf = [
-                &self.download_directory,
-                collection.category(),
-                &self.remove_invalid_chars(collection_name),
+                base_dir,
+                PathBuf::from(collection_category),
+                PathBuf::from(self.remove_invalid_chars(collection_name)),
             ]
             .iter()
             .collect();
-
-            #[cfg(windows)]
-            let mut static_path: PathBuf = [
-                &self.download_directory,
-                collection.category(),
-                &self.remove_invalid_chars(collection_name),
-            ]
-            .iter()
-            .collect();
-
-            // This is put here to attempt to shorten the length of the path if it passes window's
-            // max path length.
-            #[cfg(windows)]
-            const MAX_PATH: usize = 260; // Defined in Windows documentation.
-
-            #[cfg(windows)]
-            let start_path_len = static_path.as_os_str().len();
-
-            #[cfg(windows)]
-            if start_path_len >= MAX_PATH {
-                static_path = [
-                    &self.download_directory,
-                    collection_category,
-                    &self.remove_invalid_chars(&collection.shorten('_')),
-                ]
-                .iter()
-                .collect();
-
-                let new_len = static_path.as_os_str().len();
-                if new_len >= MAX_PATH {
-                    error!(
-                        "Path is too long and crosses the {MAX_PATH} char limit.\
-                       Please relocate the program to a directory closer to the root drive directory."
-                    );
-                    trace!("Path length: {new_len}");
-                }
-            }
 
             trace!("Printing Collection Info:");
             trace!("Collection Name:            \"{collection_name}\"");
