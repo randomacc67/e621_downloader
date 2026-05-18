@@ -443,7 +443,6 @@ impl FlagWorker {
     /// * `post`: The post to check.
     /// * `blacklist_line`: The blacklist tags to check the post against.
     fn check_post(&mut self, post: &PostEntry, blacklist_line: &LineToken) {
-        let post_tags = post.tags.clone().combine_tags();
         for tag in &blacklist_line.tags {
             match &tag.tag_type {
                 TagType::Rating(rating) => {
@@ -468,7 +467,7 @@ impl FlagWorker {
                     self.flag_score(ordering, score, post.score.total, tag.negated);
                 }
                 TagType::None => {
-                    if post_tags.iter().any(|e| e == tag.name.as_str()) {
+                    if post.tags.iter_tags().any(|e| e == tag.name.as_str()) {
                         self.raise_flag(tag.negated);
                     }
                 }

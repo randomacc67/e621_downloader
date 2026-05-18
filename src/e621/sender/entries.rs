@@ -244,21 +244,18 @@ pub(crate) struct Tags {
 }
 
 impl Tags {
-    /// Consumes and combines all of the tags into a single array.
-    pub(crate) fn combine_tags(self) -> Vec<String> {
-        vec![
-            self.general,
-            self.species,
-            self.character,
-            self.copyright,
-            self.artist,
-            self.invalid,
-            self.lore,
-            self.meta,
-        ]
-        .into_iter()
-        .flatten()
-        .collect()
+    /// Yields an iterator over references to all tag categories, avoiding allocations.
+    pub(crate) fn iter_tags(&self) -> impl Iterator<Item = &str> {
+        self.general
+            .iter()
+            .chain(&self.species)
+            .chain(&self.character)
+            .chain(&self.copyright)
+            .chain(&self.artist)
+            .chain(&self.invalid)
+            .chain(&self.lore)
+            .chain(&self.meta)
+            .map(|s| s.as_str())
     }
 }
 
