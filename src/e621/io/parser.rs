@@ -37,9 +37,10 @@ pub(crate) struct BaseParser {
 impl BaseParser {
     /// Creates a new `BaseParser` with the given input.
     pub(crate) fn new(input: String) -> Self {
+        let normalized = input.replace("\r\n", "\n").replace('\r', "\n");
         let mut parser = BaseParser {
-            input: input.trim().to_string(),
-            total_len: input.len(),
+            total_len: normalized.len(),
+            input: normalized.trim().to_string(),
             ..Default::default()
         };
         // total columns is calculated by counting every instance of a newline character.
@@ -77,10 +78,11 @@ impl BaseParser {
         let (_, cur_char) = iter
             .next()
             .expect("Attempted to consume character at end of input!");
-        let (next_pos, next_char) = iter.next().unwrap_or((1, ' '));
+        let next_pos = cur_char.len_utf8();
+        let next_char = iter.next().map(|(_, c)| c).unwrap_or(' ');
 
         // If next char is a newline, increment the column count.
-        if next_char == '\n' || next_char == '\r' {
+        if next_char == '\n' {
             self.current_column += 1;
         }
 

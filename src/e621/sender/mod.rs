@@ -96,7 +96,6 @@ impl SenderClient {
     fn build_client() -> Client {
         Client::builder()
             .use_rustls_tls()
-            .http2_prior_knowledge()
             .tcp_keepalive(Duration::from_secs(30))
             .tcp_nodelay(true)
             .timeout(Duration::from_secs(60))
@@ -264,7 +263,13 @@ impl RequestSender {
     /// returns: Response
     fn check_response(&self, result: Result<Response, reqwest::Error>) -> Response {
         match result {
-            Ok(response) => response,
+            Ok(response) => match response.error_for_status() {
+                Ok(res) => res,
+                Err(error) => {
+                    self.output_error(&error);
+                    unreachable!()
+                }
+            },
             Err(ref error) => {
                 self.output_error(error);
                 unreachable!()

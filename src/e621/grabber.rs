@@ -88,26 +88,20 @@ impl NewVec<(Vec<PostEntry>, &str)> for GrabbedPost {
     fn new_vec((vec, pool_name): (Vec<PostEntry>, &str)) -> Vec<Self> {
         vec.iter()
             .enumerate()
-            .map(|(i, e)| {
-                GrabbedPost::from((
-                    e,
-                    pool_name,
-                    u16::try_from(i + 1).expect("Something went wrong."),
-                ))
-            })
+            .map(|(i, e)| GrabbedPost::from((e, pool_name, i + 1)))
             .collect()
     }
 }
 
-impl From<(&PostEntry, &str, u16)> for GrabbedPost {
-    /// Creates [`GrabbedPost`] from tuple of types (&[`PostEntry`], &str, u16)
+impl From<(&PostEntry, &str, usize)> for GrabbedPost {
+    /// Creates [`GrabbedPost`] from tuple of types (&[`PostEntry`], &str, usize)
     ///
     /// # Arguments
     ///
     /// * `(post, name, current_page)`: A tuple containing the post, name, and current page number of post.
     ///
     /// returns: `GrabbedPost`
-    fn from((post, name, current_page): (&PostEntry, &str, u16)) -> Self {
+    fn from((post, name, current_page): (&PostEntry, &str, usize)) -> Self {
         GrabbedPost {
             url: post.file.url.clone().expect("Post URL is missing!"),
             name: format!("{} Page_{:05}.{}", name, current_page, post.file.ext),

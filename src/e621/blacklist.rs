@@ -16,8 +16,6 @@
 
 use std::cmp::Ordering;
 
-use anyhow::Context;
-
 use crate::e621::io::parser::BaseParser;
 use crate::e621::sender::RequestSender;
 use crate::e621::sender::entries::{PostEntry, UserEntry};
@@ -454,14 +452,11 @@ impl FlagWorker {
                     }
                 }
                 TagType::User(_) => {
-                    let user_id = tag
-                        .name
-                        .parse::<i64>()
-                        .with_context(|| {
-                            format!("Failed to parse blacklisted user id: {}!", tag.name)
-                        })
-                        .unwrap();
-                    self.flag_user(user_id, post.uploader_id, tag.negated);
+                    if let Ok(user_id) = tag.name.parse::<i64>() {
+                        self.flag_user(user_id, post.uploader_id, tag.negated);
+                    } else {
+                        error!("Failed to parse blacklisted user id: {}!", tag.name);
+                    }
                 }
                 TagType::Score(ordering, score) => {
                     self.flag_score(ordering, score, post.score.total, tag.negated);
