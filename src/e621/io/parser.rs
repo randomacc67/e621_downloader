@@ -140,3 +140,53 @@ impl BaseParser {
         emergency_exit("Parser error encountered.");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parser_new() {
+        let parser = BaseParser::new("test\r\ninput".to_string());
+        assert_eq!(parser.input, "test\ninput");
+    }
+
+    #[test]
+    fn test_parser_consume_char() {
+        let mut parser = BaseParser::new("ab".to_string());
+        assert_eq!(parser.consume_char(), 'a');
+        assert_eq!(parser.consume_char(), 'b');
+        assert!(parser.eof());
+    }
+
+    #[test]
+    fn test_parser_consume_char_utf8() {
+        let mut parser = BaseParser::new("🦀a".to_string());
+        assert_eq!(parser.consume_char(), '🦀');
+        assert_eq!(parser.consume_char(), 'a');
+        assert!(parser.eof());
+    }
+
+    #[test]
+    fn test_parser_next_char() {
+        let mut parser = BaseParser::new("abc".to_string());
+        assert_eq!(parser.next_char(), 'a');
+        assert_eq!(parser.consume_char(), 'a');
+        assert_eq!(parser.next_char(), 'b');
+    }
+
+    #[test]
+    fn test_parser_starts_with() {
+        let parser = BaseParser::new("hello world".to_string());
+        assert!(parser.starts_with("hello"));
+        assert!(!parser.starts_with("world"));
+    }
+
+    #[test]
+    fn test_parser_consume_while() {
+        let mut parser = BaseParser::new("12345abc".to_string());
+        let num = parser.consume_while(|c| c.is_ascii_digit());
+        assert_eq!(num, "12345");
+        assert_eq!(parser.next_char(), 'a');
+    }
+}

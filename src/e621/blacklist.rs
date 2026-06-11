@@ -594,3 +594,39 @@ impl Blacklist {
         filtered
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_blacklist_parser() {
+        let blacklist_str = "rating:s\n-user:12345\nscore:>=100\ntag1 tag2".to_string();
+        let mut parser = BlacklistParser::new(blacklist_str);
+        let root = parser.parse_blacklist();
+
+        assert_eq!(root.lines.len(), 4);
+
+        // Line 1: rating:s
+        let line1 = &root.lines[0];
+        assert_eq!(line1.tags.len(), 1);
+        assert!(!line1.tags[0].negated);
+        assert_eq!(line1.tags[0].name, "rating");
+        if let TagType::Rating(rating) = &line1.tags[0].tag_type {
+            assert_eq!(*rating, Rating::Safe);
+        } else {
+            panic!("Expected Rating");
+        }
+
+        // Line 2: -user:12345
+        let line2 = &root.lines[1];
+        assert_eq!(line2.tags.len(), 1);
+        assert!(line2.tags[0].negated);
+        assert_eq!(line2.tags[0].name, "user");
+        if let TagType::User(Some(user)) = &line2.tags[0].tag_type {
+            assert_eq!(user, "12345");
+        } else {
+            panic!("Expected User ID");
+        }
+    }
+}

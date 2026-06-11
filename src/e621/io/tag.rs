@@ -449,3 +449,41 @@ fn valid_comment(c: char) -> bool {
         _ => c.is_alphanumeric(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::e621::io::Login;
+    use crate::e621::sender::RequestSender;
+
+    #[test]
+    fn test_tag_parser() {
+        let _ = Login::initialize();
+        let sender = RequestSender::new();
+
+        let tag_file_content =
+            "[pools]\n12345\n# A comment\n[sets]\n67890\n[single-post]\n54321".to_string();
+        let mut parser = TagParser {
+            parser: BaseParser::new(tag_file_content),
+            request_sender: sender,
+        };
+
+        let groups = parser.parse_groups().unwrap();
+        assert_eq!(groups.len(), 3);
+
+        assert_eq!(groups[0].name, "pools");
+        assert_eq!(groups[0].tags.len(), 1);
+        assert_eq!(groups[0].tags[0].name, "12345");
+        assert_eq!(groups[0].tags[0].tag_type, TagType::Pool);
+
+        assert_eq!(groups[1].name, "sets");
+        assert_eq!(groups[1].tags.len(), 1);
+        assert_eq!(groups[1].tags[0].name, "67890");
+        assert_eq!(groups[1].tags[0].tag_type, TagType::Set);
+
+        assert_eq!(groups[2].name, "single-post");
+        assert_eq!(groups[2].tags.len(), 1);
+        assert_eq!(groups[2].tags[0].name, "54321");
+        assert_eq!(groups[2].tags[0].tag_type, TagType::Post);
+    }
+}
