@@ -362,7 +362,9 @@ pub(crate) struct UserEntry {
     /// The amount of negative feedback given by the user.
     pub(crate) negative_feedback_count: i64,
     /// Upload limit of the user.
-    pub(crate) upload_limit: i64,
+    pub(crate) upload_limit: Option<i64>,
+    /// Upload karma of the user.
+    pub(crate) upload_karma: i64,
     /// ID of the user.
     pub(crate) id: i64,
     /// The time the pool was created in the format of `YYYY-MM-DDTHH:MM:SS.MS+00:00`.
@@ -385,6 +387,8 @@ pub(crate) struct UserEntry {
     pub(crate) can_approve_posts: bool,
     /// Whether or not uploading posts affect the post limit.
     pub(crate) can_upload_free: bool,
+    /// Whether or not uploading posts affects karma.
+    pub(crate) upload_karma_free: bool,
     /// The string of the user's current level.
     pub(crate) level_string: String,
     /// Whether or not avatars should be shown.
@@ -415,7 +419,7 @@ pub(crate) struct UserEntry {
     pub(crate) enable_auto_complete: Option<bool>,
     /// Whether or not searches should be saved.
     pub(crate) has_saved_searches: Option<bool>,
-    /// Whether or not thumbnails should be cropped.  
+    /// Whether or not thumbnails should be cropped.
     pub(crate) disable_cropped_thumbnails: Option<bool>,
     /// Whether or not mobile gestures should be on or off.
     pub(crate) disable_mobile_gestures: Option<bool>,
