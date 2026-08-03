@@ -109,6 +109,176 @@ pub(crate) struct BulkPostEntry {
     pub(crate) posts: Vec<PostEntry>,
 }
 
+/// Extended v2 post response. This is converted into [`PostEntry`] so the rest
+/// of the application does not need to know about the v2 response layout.
+#[derive(Debug, Deserialize)]
+pub(crate) struct V2PostEntry {
+    pub(crate) id: i64,
+    pub(crate) created_at: String,
+    pub(crate) updated_at: Option<String>,
+    pub(crate) change_seq: i64,
+    pub(crate) files: V2Files,
+    pub(crate) uploader_id: i64,
+    pub(crate) approver_id: Option<i64>,
+    pub(crate) stats: V2Stats,
+    pub(crate) flags: Flags,
+    pub(crate) has: V2Has,
+    pub(crate) relationships: V2Relationships,
+    pub(crate) pools: Vec<i64>,
+    pub(crate) rating: String,
+    pub(crate) locked_tags: Vec<String>,
+    pub(crate) sources: Vec<String>,
+    pub(crate) description: String,
+    pub(crate) tags: V2Tags,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct V2Files {
+    pub(crate) meta: V2FileMeta,
+    pub(crate) original: V2Original,
+    pub(crate) preview: V2Preview,
+    pub(crate) sample: V2Sample,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct V2FileMeta {
+    pub(crate) md5: String,
+    pub(crate) ext: String,
+    pub(crate) size: i64,
+    pub(crate) has_sample: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct V2Original {
+    pub(crate) width: i64,
+    pub(crate) height: i64,
+    pub(crate) url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct V2Preview {
+    pub(crate) width: i64,
+    pub(crate) height: i64,
+    pub(crate) jpg: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct V2Sample {
+    pub(crate) width: i64,
+    pub(crate) height: i64,
+    pub(crate) jpg: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct V2Stats {
+    pub(crate) score: Score,
+    pub(crate) fav_count: i64,
+    pub(crate) is_favorited: bool,
+    pub(crate) comment_count: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct V2Has {
+    pub(crate) children: bool,
+    pub(crate) active_children: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct V2Relationships {
+    pub(crate) parent_id: Option<i64>,
+    pub(crate) children: Vec<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct V2Tags {
+    pub(crate) general: Vec<String>,
+    pub(crate) species: Vec<String>,
+    pub(crate) character: Vec<String>,
+    pub(crate) copyright: Vec<String>,
+    pub(crate) artist: Vec<String>,
+    pub(crate) invalid: Vec<String>,
+    pub(crate) lore: Vec<String>,
+    pub(crate) meta: Vec<String>,
+}
+
+impl From<V2PostEntry> for PostEntry {
+    fn from(post: V2PostEntry) -> Self {
+        let V2PostEntry {
+            id,
+            created_at,
+            updated_at,
+            change_seq,
+            files,
+            uploader_id,
+            approver_id,
+            stats,
+            flags,
+            has,
+            relationships,
+            pools,
+            rating,
+            locked_tags,
+            sources,
+            description,
+            tags,
+        } = post;
+
+        PostEntry {
+            id,
+            created_at,
+            updated_at,
+            file: File {
+                width: files.original.width,
+                height: files.original.height,
+                ext: files.meta.ext,
+                size: files.meta.size,
+                md5: files.meta.md5,
+                url: files.original.url,
+            },
+            preview: Preview {
+                width: files.preview.width,
+                height: files.preview.height,
+                url: files.preview.jpg,
+            },
+            sample: Sample {
+                has: files.meta.has_sample,
+                width: files.sample.width,
+                height: files.sample.height,
+                url: files.sample.jpg,
+            },
+            score: stats.score,
+            tags: Tags {
+                general: tags.general,
+                species: tags.species,
+                character: tags.character,
+                copyright: tags.copyright,
+                artist: tags.artist,
+                invalid: tags.invalid,
+                lore: tags.lore,
+                meta: tags.meta,
+            },
+            locked_tags,
+            change_seq,
+            flags,
+            rating,
+            fav_count: stats.fav_count,
+            sources,
+            pools,
+            relationships: Relationships {
+                parent_id: relationships.parent_id,
+                has_children: has.children,
+                has_active_children: has.active_children,
+                children: relationships.children,
+            },
+            approver_id,
+            uploader_id,
+            description,
+            comment_count: stats.comment_count,
+            is_favorited: stats.is_favorited,
+        }
+    }
+}
+
 /// GET return of post entry for e621/e926.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct PostEntry {

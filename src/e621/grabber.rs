@@ -424,9 +424,7 @@ impl Grabber {
     ///
     /// * `tag`: The tag to search for.
     fn grab_post(&mut self, tag: &Tag) {
-        let entry: PostEntry = self
-            .request_sender
-            .get_entry_from_appended_id(tag.name(), "single");
+        let entry: PostEntry = self.request_sender.get_post_entry(tag.name());
         let id = entry.id;
 
         if self.safe_mode {

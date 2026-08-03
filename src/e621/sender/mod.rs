@@ -27,7 +27,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, from_value};
 
 use crate::e621::io::{Login, emergency_exit};
-use crate::e621::sender::entries::{AliasEntry, BulkPostEntry, PostEntry, TagEntry};
+use crate::e621::sender::entries::{AliasEntry, BulkPostEntry, PostEntry, TagEntry, V2PostEntry};
 
 pub(crate) mod entries;
 
@@ -381,10 +381,12 @@ impl RequestSender {
                     ("tags", searching_tag),
                     ("page", &format!("{page}")),
                     ("limit", &320.to_string()),
+                    ("v2", "true"),
+                    ("mode", "extended"),
                 ])
                 .send(),
         )
-        .json()
+        .json::<Vec<V2PostEntry>>()
         .with_context(|| {
             error!(
                 "Unable to deserialize json to \"{}\"!",
@@ -392,7 +394,39 @@ impl RequestSender {
             );
             "Failed to perform bulk search...".to_string()
         })
+        .map(|posts| BulkPostEntry {
+            posts: posts.into_iter().map(PostEntry::from).collect(),
+        })
         .unwrap()
+    }
+
+    /// Gets a single post using the extended v2 response and converts it to
+    /// the internal post representation.
+    pub(crate) fn get_post_entry(&self, id: &str) -> PostEntry {
+        let value: Value = self
+            .check_response(
+                self.client
+                    .get_with_auth(&self.append_url(&self.urls.borrow()["single"], id))
+                    .query(&[("v2", "true"), ("mode", "extended")])
+                    .send(),
+            )
+            .json()
+            .with_context(|| format!("Unable to deserialize v2 post response for ID {id}!"))
+            .unwrap();
+
+        let post_value = if let Some(posts) = value.as_array() {
+            posts.first().cloned().unwrap_or_else(|| {
+                emergency_exit(&format!("Post ID ({id}) was not found."));
+                unreachable!()
+            })
+        } else {
+            value.get("post").cloned().unwrap_or_else(|| value.clone())
+        };
+
+        from_value::<V2PostEntry>(post_value)
+            .map(PostEntry::from)
+            .with_context(|| format!("Unable to convert v2 post ID {id} into a post entry!"))
+            .unwrap()
     }
 
     /// Gets tags by their name.
