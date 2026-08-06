@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use reqwest::blocking::{Client, RequestBuilder, Response};
-use reqwest::header::{AUTHORIZATION, USER_AGENT};
+use reqwest::header::USER_AGENT;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, from_value};
 
@@ -75,14 +75,13 @@ struct SenderClient {
     /// [Client] wrapped in a [Rc] so only one instance of the client exists. This will prevent an overabundance of
     /// clients in the code.
     client: Rc<Client>,
-    /// The base64 encrypted username and password of the user. This is passed only through the [AUTHORIZATION] header
-    /// of the request and is a highly secured method of login through client.
-    auth: Rc<String>,
+    /// The username and API key used for HTTP Basic authentication.
+    auth: Rc<Option<(String, String)>>,
 }
 
 impl SenderClient {
     /// Creates root client.
-    fn new(auth: String) -> Self {
+    fn new(auth: Option<(String, String)>) -> Self {
         trace!("SenderClient initializing with USER_AGENT_VALUE \"{USER_AGENT_VALUE}\"");
 
         SenderClient {
@@ -123,10 +122,9 @@ impl SenderClient {
     ///
     /// returns: `RequestBuilder`
     pub(crate) fn get_with_auth(&self, url: &str) -> RequestBuilder {
-        if self.auth.is_empty() {
-            self.get(url)
-        } else {
-            self.get(url).header(AUTHORIZATION, self.auth.as_str())
+        match self.auth.as_ref() {
+            Some((username, api_key)) => self.get(url).basic_auth(username, Some(api_key)),
+            None => self.get(url),
         }
     }
 }
@@ -159,9 +157,9 @@ impl RequestSender {
     pub(crate) fn new() -> Self {
         let login = Login::get();
         let auth = if login.is_empty() {
-            String::new()
+            None
         } else {
-            base64_url::encode(format!("{}:{}", login.username(), login.api_key()).as_str())
+            Some((login.username().to_string(), login.api_key().to_string()))
         };
 
         RequestSender {
@@ -187,7 +185,7 @@ impl RequestSender {
 
     /// If the client authenticated or not.
     pub(crate) fn is_authenticated(&self) -> bool {
-        !self.client.auth.is_empty()
+        self.client.auth.is_some()
     }
 
     /// Updates all the urls from e621 to e926.

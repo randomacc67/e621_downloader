@@ -5,7 +5,6 @@ authors = ["McSib <mcsibsart@gmail.com>"]
 edition = "2024"
 
 [dependencies]
-base64-url = "2.0.2"
 indicatif = "0.17.11"
 dialoguer = "0.10.4"
 console = "0.15.11"
