@@ -73,10 +73,13 @@ pub(crate) struct TagEntry {
     /// This tag can be the following types:
     /// - `0`: General;
     /// - `1`: Artist;
-    /// - `2`: Nil (This used to be something, but was removed);
+    /// - `2`: Contributor;
     /// - `3`: Copyright;
     /// - `4`: Character;
     /// - `5`: Species;
+    /// - `6`: Invalid;
+    /// - `7`: Meta;
+    /// - `8`: Lore;
     pub(crate) category: u8,
     /// Whether or not the tag is locked.
     pub(crate) is_locked: bool,
@@ -92,12 +95,8 @@ impl TagEntry {
     /// This can only be `TagType::General` or `TagType::Artist`.
     pub(crate) fn to_tag_type(&self) -> TagType {
         match self.category {
-            // `0`: General; `3`: Copyright; `5`: Species; `4`: Character; `6`: Invalid;
-            // `7`: Meta; `8`: Lore;
-            0 | 3..=8 => TagType::General,
-            // `1`: Artist;
             1 => TagType::Artist,
-            _ => unreachable!(),
+            _ => TagType::General,
         }
     }
 }
