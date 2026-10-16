@@ -16,6 +16,7 @@
 
 use std::cell::RefCell;
 use std::cmp::Ordering;
+use std::fmt::Display;
 use std::rc::Rc;
 
 use crate::e621::blacklist::Blacklist;
@@ -197,7 +198,7 @@ impl PostCollection {
     }
 }
 
-impl Shorten<&str> for PostCollection {
+impl<T: Display> Shorten<T> for PostCollection {
     /// Shortens [`PostCollection`] name if it's greater than 25 characters and attaches the delimiter at the end.
     ///
     /// # Arguments
@@ -205,30 +206,10 @@ impl Shorten<&str> for PostCollection {
     /// * `delimiter`: What to replace the excess characters with.
     ///
     /// returns: String
-    fn shorten(&self, delimiter: &str) -> String {
-        if self.name.len() >= 25 {
-            let mut short_name = self.name[0..25].to_string();
-            short_name.push_str(delimiter);
-            short_name
-        } else {
-            self.name.clone()
-        }
-    }
-}
-
-impl Shorten<char> for PostCollection {
-    /// Shortens [`PostCollection`] name if it's greater than 25 characters and attaches the delimiter at the end.
-    ///
-    /// # Arguments
-    ///
-    /// * `delimiter`: What to replace the excess characters with.
-    ///
-    /// returns: String
-    fn shorten(&self, delimiter: char) -> String {
-        if self.name.len() >= 25 {
-            let mut short_name = self.name[0..25].to_string();
-            short_name.push(delimiter);
-            short_name
+    fn shorten(&self, delimiter: T) -> String {
+        if self.name.chars().count() > 25 {
+            let truncated: String = self.name.chars().take(25).collect();
+            format!("{truncated}{delimiter}")
         } else {
             self.name.clone()
         }
