@@ -212,11 +212,7 @@ impl Login {
 
     /// Checks if the login user and password is empty.
     pub(crate) fn is_empty(&self) -> bool {
-        if self.username.is_empty() || self.api_key.is_empty() {
-            return true;
-        }
-
-        false
+        self.username.is_empty() || self.api_key.is_empty()
     }
 
     /// Saves the login to the login file.
