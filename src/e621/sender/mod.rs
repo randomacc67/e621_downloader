@@ -23,11 +23,14 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use reqwest::blocking::{Client, RequestBuilder, Response};
 use reqwest::header::USER_AGENT;
+use reqwest::{StatusCode, Url};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, from_value};
 
 use crate::e621::io::{Login, emergency_exit};
-use crate::e621::sender::entries::{AliasEntry, BulkPostEntry, PostEntry, TagEntry, V2PostEntry};
+use crate::e621::sender::entries::{
+    AliasEntry, BulkPostEntry, PostEntry, TagEntry, UserEntry, V2PostEntry,
+};
 
 pub(crate) mod entries;
 
@@ -114,7 +117,7 @@ impl SenderClient {
         self.client.get(url).header(USER_AGENT, USER_AGENT_VALUE)
     }
 
-    /// This is the same as `self.get(url)` but will attach the authorization header with username and API hash.
+    /// This is the same as `self.get(url)` but will attach the authorization header with username and API key.
     ///
     /// # Arguments
     ///
@@ -175,11 +178,10 @@ impl RequestSender {
             ("pool", "https://e621.net/pools/"),
             ("set", "https://e621.net/post_sets/"),
             ("single", "https://e621.net/posts/"),
-            ("blacklist", "https://e621.net/users/"),
             ("tag", "https://e621.net/tags/"),
             ("tag_bulk", "https://e621.net/tags.json"),
             ("alias", "https://e621.net/tag_aliases.json"),
-            ("user", "https://e621.net/users/")
+            ("user_me", "https://e621.net/users/me.json")
         ]
     }
 
@@ -196,60 +198,96 @@ impl RequestSender {
             .for_each(|(_, value)| *value = value.replace("e621", "e926"));
     }
 
-    /// If a request failed, this will output what type of error it is before exiting.
-    ///
-    /// # Arguments
-    ///
-    /// * `error`: The type of error thrown.
-    fn output_error(&self, error: &reqwest::Error) {
-        error!(
-            "Error occurred from sent request. \
-             Error: {error}",
-        );
+    /// Outputs a transport-level request failure before exiting.
+    fn output_transport_error(&self, error: &reqwest::Error) -> ! {
+        error!("Error occurred from sent request. Error: {error}");
         trace!("Url where error occurred: {:#?}", error.url());
 
-        if let Some(status) = error.status() {
-            const SERVER_INTERNAL: u16 = 500;
-            const SERVER_RATE_LIMIT: u16 = 503;
-            const CLIENT_FORBIDDEN: u16 = 403;
-            const CLIENT_THROTTLED: u16 = 421;
+        emergency_exit("To prevent the program from crashing, it will do an emergency exit.");
+        unreachable!()
+    }
 
-            let code = status.as_u16();
-            trace!("The response code from the server was: {code}");
+    /// Outputs a descriptive HTTP error from e621/e926 or Cloudflare before exiting.
+    fn output_http_error(&self, status: StatusCode, url: &Url, body: Option<&str>) -> ! {
+        let code = status.as_u16();
+        error!("Request failed with HTTP status {status} from \"{url}\".");
+        trace!("The response code from the server was: {code}");
 
-            match code {
-                SERVER_INTERNAL => {
-                    error!(
-                        "There was an error that happened internally in the servers, \
-                         please try using the downloader later until the issue is solved."
-                    );
-                }
-                SERVER_RATE_LIMIT => {
-                    error!(
-                        "Server could not handle the request, or the downloader has \
-                         exceeded the rate-limit. Contact the developer immediately about this \
-                         issue."
-                    );
-                }
-                CLIENT_FORBIDDEN => {
-                    error!(
-                        "The client was forbidden from accessing the api, contact the \
-                         developer immediately if this error occurs."
-                    );
-                }
-                CLIENT_THROTTLED => {
-                    error!(
-                        "The user is throttled, thus the request is unsuccessful. \
-                         Contact the developer immediately if this error occurs."
-                    );
-                }
-                _ => {
-                    error!("Response code couldn't be posted...");
-                }
+        if let Some(details) = body.and_then(extract_api_error_details) {
+            error!("Server response: {details}");
+        }
+
+        match code {
+            400 => {
+                error!(
+                    "Bad request: the request parameters were invalid or the requested feature is unavailable."
+                );
+            }
+            401 => {
+                error!(
+                    "Authentication failed: check your username and API key in login.json \
+                     (the API key may be expired or revoked, or the account may be restricted)."
+                );
+            }
+            403 => {
+                error!(
+                    "Access denied: insufficient permissions, private resource, or the User-Agent/client \
+                     was blocked by the server."
+                );
+            }
+            404 => {
+                error!("The requested resource (post, pool, set, or user) was not found.");
+            }
+            410 => {
+                error!(
+                    "Pagination limit reached or invalid page parameter (e621 restricts numbered \
+                     pagination to at most 750 pages)."
+                );
+            }
+            413 => {
+                error!("The request exceeded server size or parameter limits.");
+            }
+            422 => {
+                error!(
+                    "The server rejected the query or input (e.g., too many tags, overly complex \
+                     search, search timeout, or GET parameter over 16 KB)."
+                );
+            }
+            429 => {
+                error!(
+                    "Rate limited / throttled by the server. Wait a moment and try again later."
+                );
+            }
+            500 => {
+                error!(
+                    "There was an internal error or database timeout on the server, \
+                     please try using the downloader later until the issue is resolved."
+                );
+            }
+            502 => {
+                error!(
+                    "Bad gateway: Cloudflare could not reach e621/e926. Please try again later."
+                );
+            }
+            503 => {
+                error!(
+                    "Service unavailable: exceeded the 2 requests/second rate limit or e621/e926 \
+                     is temporarily unavailable. Please try again later."
+                );
+            }
+            520 | 522 | 524 | 525 => {
+                error!(
+                    "Cloudflare encountered a connection error reaching e621/e926 (HTTP {code}). \
+                     Please try again later."
+                );
+            }
+            _ => {
+                error!("Unexpected HTTP error response (status {code}).");
             }
         }
 
         emergency_exit("To prevent the program from crashing, it will do an emergency exit.");
+        unreachable!()
     }
 
     /// Gets the response from a sent request and checks to ensure it was successful.
@@ -261,17 +299,17 @@ impl RequestSender {
     /// returns: Response
     fn check_response(&self, result: Result<Response, reqwest::Error>) -> Response {
         match result {
-            Ok(response) => match response.error_for_status() {
-                Ok(res) => res,
-                Err(error) => {
-                    self.output_error(&error);
-                    unreachable!()
+            Ok(response) => {
+                let status = response.status();
+                if status.is_success() {
+                    response
+                } else {
+                    let url = response.url().clone();
+                    let body = response.text().ok();
+                    self.output_http_error(status, &url, body.as_deref());
                 }
-            },
-            Err(ref error) => {
-                self.output_error(error);
-                unreachable!()
             }
+            Err(ref error) => self.output_transport_error(error),
         }
     }
 
@@ -319,46 +357,40 @@ impl RequestSender {
     where
         T: DeserializeOwned,
     {
-        let value: Value = self
-            .check_response(
-                self.client
-                    .get_with_auth(&self.append_url(&self.urls.borrow()[url_type_key], id))
-                    .send(),
+        self.check_response(
+            self.client
+                .get_with_auth(&self.append_url(&self.urls.borrow()[url_type_key], id))
+                .send(),
+        )
+        .json::<T>()
+        .with_context(|| {
+            format!(
+                "Json was unable to deserialize to \"{}\"!\n\
+                 url_type_key: {}\n\
+                 id: {}",
+                type_name::<T>(),
+                url_type_key,
+                id
             )
-            .json()
-            .with_context(|| {
-                format!(
-                    "Json was unable to deserialize to \"{}\"!\n\
-                     url_type_key: {}\n\
-                     id: {}",
-                    type_name::<Value>(),
-                    url_type_key,
-                    id
-                )
-            })
-            .unwrap();
+        })
+        .unwrap()
+    }
 
-        let value = match url_type_key {
-            "single" => value
-                .get("post")
-                .unwrap_or_else(|| {
-                    emergency_exit(&format!(
-                        "Post was not found! Post ID ({id}) is invalid or post was deleted."
-                    ));
-                    unreachable!()
-                })
-                .to_owned(),
-            _ => value,
-        };
-
-        from_value(value)
-            .with_context(|| {
-                error!("Could not convert entry to type \"{}\"!", type_name::<T>());
-                "Unexpected error occurred when trying to perform conversion from value to entry \
-                type above."
-                    .to_string()
-            })
-            .unwrap()
+    /// Fetches the authenticated user's profile via `/users/me.json`.
+    pub(crate) fn get_current_user(&self) -> UserEntry {
+        self.check_response(
+            self.client
+                .get_with_auth(&self.urls.borrow()["user_me"])
+                .send(),
+        )
+        .json::<UserEntry>()
+        .with_context(|| {
+            format!(
+                "Json was unable to deserialize to \"{}\" from user_me!",
+                type_name::<UserEntry>()
+            )
+        })
+        .unwrap()
     }
 
     /// Performs a bulk search for posts using tags to filter the response.
@@ -366,21 +398,27 @@ impl RequestSender {
     /// # Arguments
     ///
     /// * `searching_tag`: The tags for filtering.
-    /// * `page`: The page to search for.
+    /// * `page`: The page specifier to search for (numbered like `"1"` or sequential like `"b12345"`).
+    /// * `extended`: Whether to request categorized tags (`mode=extended`) or flat tags (`mode=basic`).
     ///
     /// returns: `BulkPostEntry`
-    pub(crate) fn bulk_search(&self, searching_tag: &str, page: u16) -> BulkPostEntry {
-        debug!("Downloading page {page} of tag {searching_tag}");
+    pub(crate) fn bulk_search(
+        &self,
+        searching_tag: &str,
+        page: &str,
+        extended: bool,
+    ) -> BulkPostEntry {
+        let mode = if extended { "extended" } else { "basic" };
+        debug!("Downloading page {page} of tag {searching_tag} (mode={mode})");
 
         self.check_response(
             self.client
                 .get_with_auth(&self.urls.borrow()["posts"])
                 .query(&[
                     ("tags", searching_tag),
-                    ("page", &format!("{page}")),
-                    ("limit", &320.to_string()),
-                    ("v2", "true"),
-                    ("mode", "extended"),
+                    ("page", page),
+                    ("limit", "320"),
+                    ("mode", mode),
                 ])
                 .send(),
         )
@@ -398,33 +436,21 @@ impl RequestSender {
         .unwrap()
     }
 
-    /// Gets a single post using the extended v2 response and converts it to
+    /// Gets a single post using the v2 response and converts it to
     /// the internal post representation.
-    pub(crate) fn get_post_entry(&self, id: &str) -> PostEntry {
-        let value: Value = self
-            .check_response(
-                self.client
-                    .get_with_auth(&self.append_url(&self.urls.borrow()["single"], id))
-                    .query(&[("v2", "true"), ("mode", "extended")])
-                    .send(),
-            )
-            .json()
-            .with_context(|| format!("Unable to deserialize v2 post response for ID {id}!"))
-            .unwrap();
+    pub(crate) fn get_post_entry(&self, id: &str, extended: bool) -> PostEntry {
+        let mode = if extended { "extended" } else { "basic" };
 
-        let post_value = if let Some(posts) = value.as_array() {
-            posts.first().cloned().unwrap_or_else(|| {
-                emergency_exit(&format!("Post ID ({id}) was not found."));
-                unreachable!()
-            })
-        } else {
-            value.get("post").cloned().unwrap_or_else(|| value.clone())
-        };
-
-        from_value::<V2PostEntry>(post_value)
-            .map(PostEntry::from)
-            .with_context(|| format!("Unable to convert v2 post ID {id} into a post entry!"))
-            .unwrap()
+        self.check_response(
+            self.client
+                .get_with_auth(&self.append_url(&self.urls.borrow()["single"], id))
+                .query(&[("mode", mode)])
+                .send(),
+        )
+        .json::<V2PostEntry>()
+        .map(PostEntry::from)
+        .with_context(|| format!("Unable to deserialize post response for ID {id}!"))
+        .unwrap()
     }
 
     /// Gets tags by their name.
@@ -514,4 +540,26 @@ impl Clone for RequestSender {
             urls: Rc::clone(&self.urls),
         }
     }
+}
+
+/// Extracts the server's `message` or `reason` (and optional exception `code`) from an e621 JSON error response.
+fn extract_api_error_details(body: &str) -> Option<String> {
+    let json: Value = serde_json::from_str(body).ok()?;
+    let detail = json
+        .get("message")
+        .or_else(|| json.get("reason"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())?;
+
+    let log_code = json
+        .get("code")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+
+    Some(match log_code {
+        Some(code) => format!("{detail} (error code: {code})"),
+        None => detail.to_string(),
+    })
 }

@@ -83,10 +83,13 @@ As of version **1.8.0**, you can use custom templates for naming your files. You
 - `{id}`: The unique ID of the post.
 - `{md5}`: The MD5 hash of the file.
 - `{artist}`: The artist(s) who created the work.
+- `{contributor}`: Contributor tags on the post.
 - `{characters}`: Characters tagged in the post.
 - `{copyright}`: The series or copyright tagged.
 - `{species}`: Species tagged.
 - `{general}`: General tags.
+- `{meta}`: Meta tags on the post.
+- `{lore}`: Lore tags on the post.
 - `{rating}`: The post's rating (`s`, `q`, or `e`).
 
 **Legacy Support:**
@@ -99,7 +102,7 @@ You can still use `"md5"` or `"id"` to use the original naming schemes.
 
 ### Why does the program only grab only 1,280 posts with certain tags?
 
-When a tag passes the limit of **1,500** posts, it is **considered too large a collection for the software to download** as the size of all the files combined will not only put strain on the server, but on the program as well as the system it runs on. The program will opt to download only 5 pages worth of posts to compensate for this hard limit. The pages use the **highest post limit** the e621/e926 servers will allow, which is **320 posts per page**. In total, it will grab **1,280 posts as its maximum**.
+When a tag passes the limit of **1,500** posts, it is **considered too large a collection for the software to download** as the size of all the files combined will not only put strain on the server, but on the program as well as the system it runs on. The program will opt to download only 4 pages worth of posts to compensate for this hard limit. The pages use the **highest post limit** the e621/e926 servers will allow, which is **320 posts per page**. In total, it will grab **1,280 posts as its maximum**.
 
 Something to keep a note of, depending on the type of tag, the program will either ignore or use this limit. This is handled low-level by categorizing the tag into two sections: **General** and **Special**.
 

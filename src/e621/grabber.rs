@@ -129,6 +129,7 @@ impl From<(PostEntry, &str)> for GrabbedPost {
             name = name.replace("{id}", &post.id.to_string());
             name = name.replace("{md5}", &post.file.md5);
             name = name.replace("{artist}", &post.tags.artist.join(" "));
+            name = name.replace("{contributor}", &post.tags.contributor.join(" "));
             name = name.replace("{characters}", &post.tags.character.join(" "));
             name = name.replace("{copyright}", &post.tags.copyright.join(" "));
             name = name.replace("{species}", &post.tags.species.join(" "));
@@ -232,6 +233,20 @@ impl From<(&SetEntry, Vec<GrabbedPost>)> for PostCollection {
 /// The total amount of pages the general search can search for.
 const POST_SEARCH_LIMIT: u8 = 5;
 
+/// Maximum numbered page e621 allows before returning HTTP 410 Gone.
+const MAX_NUMBERED_PAGES: u16 = 750;
+
+/// Returns `true` if `searching_tag` specifies a custom sort order (`order:`, `-order:`, or `randseed:`),
+/// which would be overridden by e621's sequential (`page=b<id>`) pagination.
+fn has_custom_order(searching_tag: &str) -> bool {
+    searching_tag.split_whitespace().any(|token| {
+        let token = token.trim_start_matches(['(', '-', '~']);
+        token.split_once(':').is_some_and(|(key, _)| {
+            key.eq_ignore_ascii_case("order") || key.eq_ignore_ascii_case("randseed")
+        })
+    })
+}
+
 /// Is a collector that grabs posts, categorizes them, and prepares them for the downloader to use in downloading.
 pub(crate) struct Grabber {
     /// All grabbed posts.
@@ -303,7 +318,11 @@ impl Grabber {
                 None
             };
 
-            let posts = self.search(&tag, &TagSearchType::Special);
+            let posts = self.search(
+                &tag,
+                &TagSearchType::Special,
+                Config::get().needs_categorized_tags(),
+            );
 
             if ignore_blacklist {
                 self.blacklist = original_blacklist;
@@ -405,7 +424,9 @@ impl Grabber {
     ///
     /// * `tag`: The tag to search for.
     fn grab_post(&mut self, tag: &Tag) {
-        let entry: PostEntry = self.request_sender.get_post_entry(tag.name());
+        let entry: PostEntry = self
+            .request_sender
+            .get_post_entry(tag.name(), Config::get().needs_categorized_tags());
         let id = entry.id;
 
         if self.safe_mode {
@@ -436,7 +457,11 @@ impl Grabber {
             .get_entry_from_appended_id(tag.name(), "set");
 
         // Grabs posts from IDs in the set entry.
-        let posts = self.search(&format!("set:{}", entry.shortname), &TagSearchType::Special);
+        let posts = self.search(
+            &format!("set:{}", entry.shortname),
+            &TagSearchType::Special,
+            Config::get().needs_categorized_tags(),
+        );
         self.posts
             .push(PostCollection::from((&entry, GrabbedPost::new_vec(posts))));
 
@@ -458,7 +483,11 @@ impl Grabber {
             .request_sender
             .get_entry_from_appended_id(tag.name(), "pool");
         let name = &entry.name;
-        let mut posts = self.search(&format!("pool:{}", entry.id), &TagSearchType::Special);
+        let mut posts = self.search(
+            &format!("pool:{}", entry.id),
+            &TagSearchType::Special,
+            false,
+        );
 
         // Updates entry post ids in case any posts were filtered in the search.
         entry
@@ -506,7 +535,11 @@ impl Grabber {
     ///
     /// returns: Vec<`PostEntry`, Global>
     fn get_posts_from_tag(&self, tag: &Tag) -> Vec<PostEntry> {
-        self.search(tag.name(), tag.search_type())
+        self.search(
+            tag.name(),
+            tag.search_type(),
+            Config::get().needs_categorized_tags(),
+        )
     }
 
     /// Performs a search where it grabs posts.
@@ -519,19 +552,37 @@ impl Grabber {
     ///
     /// * `searching_tag`: The tag used for the search.
     /// * `tag_search_type`: The type of search to happen.
+    /// * `extended`: Whether categorized tag arrays (`mode=extended`) are needed.
     ///
     /// returns: Vec<`PostEntry`, Global>
-    fn search(&self, searching_tag: &str, tag_search_type: &TagSearchType) -> Vec<PostEntry> {
+    fn search(
+        &self,
+        searching_tag: &str,
+        tag_search_type: &TagSearchType,
+        extended: bool,
+    ) -> Vec<PostEntry> {
         let mut posts: Vec<PostEntry> = Vec::new();
-        let mut filtered = 0;
-        let mut invalid_posts = 0;
+        let mut filtered: usize = 0;
+        let mut invalid_posts: usize = 0;
         match tag_search_type {
             TagSearchType::General => {
-                posts = Vec::with_capacity(320 * POST_SEARCH_LIMIT as usize);
-                self.general_search(searching_tag, &mut posts, &mut filtered, &mut invalid_posts);
+                posts = Vec::with_capacity(320 * (POST_SEARCH_LIMIT as usize - 1));
+                self.general_search(
+                    searching_tag,
+                    extended,
+                    &mut posts,
+                    &mut filtered,
+                    &mut invalid_posts,
+                );
             }
             TagSearchType::Special => {
-                self.special_search(searching_tag, &mut posts, &mut filtered, &mut invalid_posts);
+                self.special_search(
+                    searching_tag,
+                    extended,
+                    &mut posts,
+                    &mut filtered,
+                    &mut invalid_posts,
+                );
             }
             TagSearchType::None => {}
         }
@@ -555,38 +606,80 @@ impl Grabber {
 
     /// Performs a special search to grab posts.
     ///
-    /// The difference between special/general searches are this.
-    /// - Special searches aim to keep grabbing posts until there are not posts left to grab.
-    /// - General searches aim to grab only a few pages of posts (commonly 320 posts per page). You can refer to the
-    ///   [`POST_SEARCH_LIMIT`] for the current search limit of the general search.
+    /// Uses sequential keyset pagination (`page=b<lowest_id>`) by default so deep searches avoid
+    /// e621's 750-page numbered ceiling and page-shift drift. Falls back to numbered pagination
+    /// (capped at [`MAX_NUMBERED_PAGES`]) when the query contains a custom `order:` or `randseed:`.
     ///
     /// # Arguments
     ///
     /// * `searching_tag`: The tag to search for.
+    /// * `extended`: Whether categorized tag arrays (`mode=extended`) are needed.
     /// * `posts`:  The posts [Vec] to add searched posts into.
     /// * `filtered`: The total amount of posts filtered.
     /// * `invalid_posts`: The total amount of posts invalid by the [Blacklist].
     fn special_search(
         &self,
         searching_tag: &str,
+        extended: bool,
         posts: &mut Vec<PostEntry>,
-        filtered: &mut u16,
-        invalid_posts: &mut u16,
+        filtered: &mut usize,
+        invalid_posts: &mut usize,
     ) {
-        let mut page = 1;
+        if has_custom_order(searching_tag) {
+            for page in 1..=MAX_NUMBERED_PAGES {
+                let mut searched_posts = self
+                    .request_sender
+                    .bulk_search(searching_tag, &page.to_string(), extended)
+                    .posts;
+                if searched_posts.is_empty() {
+                    break;
+                }
+
+                let page_count = searched_posts.len();
+                *filtered += usize::from(self.filter_posts_with_blacklist(&mut searched_posts));
+                *invalid_posts += usize::from(Self::remove_invalid_posts(&mut searched_posts));
+
+                searched_posts.reverse();
+                posts.append(&mut searched_posts);
+
+                if page == MAX_NUMBERED_PAGES && page_count >= 320 {
+                    warn!(
+                        "Reached e621's {MAX_NUMBERED_PAGES}-page numbered limit for custom-ordered \
+                         search \"{searching_tag}\"; remaining posts cannot be fetched with custom ordering."
+                    );
+                }
+            }
+            return;
+        }
+
+        let mut page = String::from("1");
+        let mut last_lowest_id: Option<i64> = None;
 
         loop {
-            let mut searched_posts = self.request_sender.bulk_search(searching_tag, page).posts;
+            let mut searched_posts = self
+                .request_sender
+                .bulk_search(searching_tag, &page, extended)
+                .posts;
             if searched_posts.is_empty() {
                 break;
             }
 
-            *filtered += self.filter_posts_with_blacklist(&mut searched_posts);
-            *invalid_posts += Self::remove_invalid_posts(&mut searched_posts);
+            // Record the lowest ID before blacklist/invalid filtering removes entries from this page.
+            let lowest_id = searched_posts.iter().map(|post| post.id).min();
+
+            *filtered += usize::from(self.filter_posts_with_blacklist(&mut searched_posts));
+            *invalid_posts += usize::from(Self::remove_invalid_posts(&mut searched_posts));
 
             searched_posts.reverse();
             posts.append(&mut searched_posts);
-            page += 1;
+
+            match lowest_id {
+                Some(id) if id > 1 && last_lowest_id.is_none_or(|prev| id < prev) => {
+                    last_lowest_id = Some(id);
+                    page = format!("b{id}");
+                }
+                _ => break,
+            }
         }
     }
 
@@ -600,27 +693,29 @@ impl Grabber {
     /// # Arguments
     ///
     /// * `searching_tag`: The tag to search for.
+    /// * `extended`: Whether categorized tag arrays (`mode=extended`) are needed.
     /// * `posts`:  The posts [Vec] to add searched posts into.
     /// * `filtered`: The total amount of posts filtered.
     /// * `invalid_posts`: The total amount of posts invalid by the [Blacklist].
     fn general_search(
         &self,
         searching_tag: &str,
+        extended: bool,
         posts: &mut Vec<PostEntry>,
-        filtered: &mut u16,
-        invalid_posts: &mut u16,
+        filtered: &mut usize,
+        invalid_posts: &mut usize,
     ) {
         for page in 1..POST_SEARCH_LIMIT {
             let mut searched_posts: Vec<PostEntry> = self
                 .request_sender
-                .bulk_search(searching_tag, u16::from(page))
+                .bulk_search(searching_tag, &page.to_string(), extended)
                 .posts;
             if searched_posts.is_empty() {
                 break;
             }
 
-            *filtered += self.filter_posts_with_blacklist(&mut searched_posts);
-            *invalid_posts += Self::remove_invalid_posts(&mut searched_posts);
+            *filtered += usize::from(self.filter_posts_with_blacklist(&mut searched_posts));
+            *invalid_posts += usize::from(Self::remove_invalid_posts(&mut searched_posts));
 
             searched_posts.reverse();
             posts.append(&mut searched_posts);
@@ -691,6 +786,38 @@ impl Grabber {
                 );
                 trace!("{invalid_posts} posts had to be filtered by e621/e926...",);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::has_custom_order;
+
+    #[test]
+    fn test_has_custom_order() {
+        for ordered in [
+            "lutrine order:score",
+            "wolf -order:id_asc",
+            "ORDER:favcount",
+            "(order:score rating:s)",
+            "fox ~order:random",
+            "fox randseed:12345",
+        ] {
+            assert!(has_custom_order(ordered), "expected true for: {ordered}");
+        }
+
+        for unordered in [
+            "fav:someone",
+            "pool:123",
+            "set:my_set",
+            "disorder:foo",
+            "artist_name rating:s",
+        ] {
+            assert!(
+                !has_custom_order(unordered),
+                "expected false for: {unordered}"
+            );
         }
     }
 }

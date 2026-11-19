@@ -36,7 +36,7 @@ pub(crate) enum TagSearchType {
     General,
     /// A special tag that is searched differently from general tags (artist and characters).
     Special,
-    /// This is used only if the type of tag is `2` or its greater than `5`.
+    /// Default/unassigned search type for unrecognized or non-searchable syntax tokens.
     None,
 }
 

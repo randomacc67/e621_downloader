@@ -26,10 +26,9 @@ use indicatif::{ProgressBar, ProgressDrawTarget};
 
 use crate::e621::blacklist::Blacklist;
 use crate::e621::grabber::{Grabber, Shorten};
+use crate::e621::io::Config;
 use crate::e621::io::tag::Group;
-use crate::e621::io::{Config, Login};
 use crate::e621::sender::RequestSender;
-use crate::e621::sender::entries::UserEntry;
 use crate::e621::tui::{ProgressBarBuilder, ProgressStyleBuilder};
 
 pub(crate) mod blacklist;
@@ -61,7 +60,7 @@ impl E621WebConnector {
             download_directory: Config::get().download_directory().to_string(),
             progress_bar: ProgressBar::hidden(),
             grabber: Grabber::new(request_sender.clone(), false),
-            blacklist: Rc::new(RefCell::new(Blacklist::new(request_sender.clone()))),
+            blacklist: Rc::new(RefCell::new(Blacklist::new())),
         }
     }
 
@@ -89,18 +88,13 @@ impl E621WebConnector {
 
     /// Processes the blacklist and tokenizes for use when grabbing posts.
     pub(crate) fn process_blacklist(&mut self) {
-        let username = Login::get().username();
-        let user: UserEntry = self
-            .request_sender
-            .get_entry_from_appended_id(username, "user");
+        let user = self.request_sender.get_current_user();
+        trace!("Loaded user {} (id: {})", user.name, user.id);
         if let Some(blacklist_tags) = user.blacklisted_tags
             && !blacklist_tags.is_empty()
         {
             let blacklist = self.blacklist.clone();
-            blacklist
-                .borrow_mut()
-                .parse_blacklist(blacklist_tags)
-                .cache_users();
+            blacklist.borrow_mut().parse_blacklist(&blacklist_tags);
             self.grabber.set_blacklist(blacklist);
         }
     }

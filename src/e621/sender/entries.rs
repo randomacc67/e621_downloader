@@ -65,9 +65,9 @@ pub(crate) struct TagEntry {
     /// Amount of posts that uses the tag.
     pub(crate) post_count: i64,
     /// Related tags that this tag is commonly paired with.
-    pub(crate) related_tags: String,
+    pub(crate) related_tags: Option<String>,
     /// Most recent date the `related_tags` was updated.
-    pub(crate) related_tags_updated_at: String,
+    pub(crate) related_tags_updated_at: Option<String>,
     /// The type of tag it is.
     ///
     /// This tag can be the following types:
@@ -118,6 +118,7 @@ pub(crate) struct V2PostEntry {
     pub(crate) change_seq: i64,
     pub(crate) files: V2Files,
     pub(crate) uploader_id: i64,
+    pub(crate) uploader_name: Option<String>,
     pub(crate) approver_id: Option<i64>,
     pub(crate) stats: V2Stats,
     pub(crate) flags: Flags,
@@ -141,8 +142,8 @@ pub(crate) struct V2Files {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct V2FileMeta {
-    pub(crate) md5: String,
-    pub(crate) ext: String,
+    pub(crate) md5: Option<String>,
+    pub(crate) ext: Option<String>,
     pub(crate) size: i64,
     pub(crate) has_sample: Option<bool>,
 }
@@ -188,13 +189,22 @@ pub(crate) struct V2Relationships {
     pub(crate) children: Vec<i64>,
 }
 
+/// Tag payload from the v2 posts API: a flat array in `mode=basic` or categorized arrays in `mode=extended`.
 #[derive(Debug, Deserialize)]
-pub(crate) struct V2Tags {
+#[serde(untagged)]
+pub(crate) enum V2Tags {
+    Basic(Vec<String>),
+    Extended(V2CategorizedTags),
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct V2CategorizedTags {
     pub(crate) general: Vec<String>,
     pub(crate) species: Vec<String>,
     pub(crate) character: Vec<String>,
     pub(crate) copyright: Vec<String>,
     pub(crate) artist: Vec<String>,
+    pub(crate) contributor: Vec<String>,
     pub(crate) invalid: Vec<String>,
     pub(crate) lore: Vec<String>,
     pub(crate) meta: Vec<String>,
@@ -209,6 +219,7 @@ impl From<V2PostEntry> for PostEntry {
             change_seq,
             files,
             uploader_id,
+            uploader_name,
             approver_id,
             stats,
             flags,
@@ -229,9 +240,9 @@ impl From<V2PostEntry> for PostEntry {
             file: File {
                 width: files.original.width,
                 height: files.original.height,
-                ext: files.meta.ext,
+                ext: files.meta.ext.unwrap_or_default(),
                 size: files.meta.size,
-                md5: files.meta.md5,
+                md5: files.meta.md5.unwrap_or_default(),
                 url: files.original.url,
             },
             preview: Preview {
@@ -246,15 +257,22 @@ impl From<V2PostEntry> for PostEntry {
                 url: files.sample.jpg,
             },
             score: stats.score,
-            tags: Tags {
-                general: tags.general,
-                species: tags.species,
-                character: tags.character,
-                copyright: tags.copyright,
-                artist: tags.artist,
-                invalid: tags.invalid,
-                lore: tags.lore,
-                meta: tags.meta,
+            tags: match tags {
+                V2Tags::Basic(flat_tags) => Tags {
+                    general: flat_tags,
+                    ..Default::default()
+                },
+                V2Tags::Extended(categorized) => Tags {
+                    general: categorized.general,
+                    species: categorized.species,
+                    character: categorized.character,
+                    copyright: categorized.copyright,
+                    artist: categorized.artist,
+                    contributor: categorized.contributor,
+                    invalid: categorized.invalid,
+                    lore: categorized.lore,
+                    meta: categorized.meta,
+                },
             },
             locked_tags,
             change_seq,
@@ -271,6 +289,7 @@ impl From<V2PostEntry> for PostEntry {
             },
             approver_id,
             uploader_id,
+            uploader_name,
             description,
             comment_count: stats.comment_count,
             is_favorited: stats.is_favorited,
@@ -335,6 +354,8 @@ pub(crate) struct PostEntry {
     pub(crate) approver_id: Option<i64>,
     /// The ID of the user that uploaded the post.
     pub(crate) uploader_id: i64,
+    /// The username of the user that uploaded the post, if available.
+    pub(crate) uploader_name: Option<String>,
     /// The post’s description.
     pub(crate) description: String,
     /// The count of comments on the post.
@@ -404,6 +425,8 @@ pub(crate) struct Tags {
     pub(crate) copyright: Vec<String>,
     /// An array of all the `artist` tags on the post.
     pub(crate) artist: Vec<String>,
+    /// An array of all the `contributor` tags on the post.
+    pub(crate) contributor: Vec<String>,
     /// An array of all the `invalid` tags on the post.
     pub(crate) invalid: Vec<String>,
     /// An array of all the `lore` tags on the post.
@@ -421,6 +444,7 @@ impl Tags {
             .chain(&self.character)
             .chain(&self.copyright)
             .chain(&self.artist)
+            .chain(&self.contributor)
             .chain(&self.invalid)
             .chain(&self.lore)
             .chain(&self.meta)
@@ -496,7 +520,7 @@ pub(crate) struct PoolEntry {
     /// The ID of the user that created the pool.
     pub(crate) creator_id: i64,
     /// The description of the pool.
-    pub(crate) description: String,
+    pub(crate) description: Option<String>,
     /// If the pool is active and still getting posts added.
     pub(crate) is_active: bool,
     /// Can be `series` or `collection`.
@@ -509,139 +533,13 @@ pub(crate) struct PoolEntry {
     pub(crate) post_count: i64,
 }
 
-/// GET return of user entry for e621/e926.
+/// Subset of the user JSON response returned by `/users/me.json`.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct UserEntry {
-    /// The amount of wiki changes made by the user.
-    pub(crate) wiki_page_version_count: i64,
-    /// The amount of artist changes made by the user.
-    pub(crate) artist_version_count: i64,
-    /// The amount of pool changes made by the user.
-    pub(crate) pool_version_count: i64,
-    /// The amount of post changes made by the user.
-    pub(crate) forum_post_count: i64,
-    /// Count of comments posted by the user.
-    pub(crate) comment_count: i64,
-    /// Count of flags done by the user.
-    pub(crate) flag_count: i64,
-    /// The amount of positive feedback given by the user.
-    pub(crate) positive_feedback_count: i64,
-    /// The amount of neutral feedback given by the user.
-    pub(crate) neutral_feedback_count: i64,
-    /// The amount of negative feedback given by the user.
-    pub(crate) negative_feedback_count: i64,
-    /// Upload limit of the user.
-    pub(crate) upload_limit: Option<i64>,
-    /// Upload karma of the user.
-    pub(crate) upload_karma: i64,
-    /// ID of the user.
+    /// The unique ID of the user.
     pub(crate) id: i64,
-    /// The time the pool was created in the format of `YYYY-MM-DDTHH:MM:SS.MS+00:00`.
-    pub(crate) created_at: String,
-    /// Name of the user.
+    /// The username of the user.
     pub(crate) name: String,
-    /// Level of the user.
-    pub(crate) level: i64,
-    /// Base upload limit of the user.
-    pub(crate) base_upload_limit: i64,
-    /// Count of posts uploaded by the user.
-    pub(crate) post_upload_count: i64,
-    /// Count of posts updated by the user.
-    pub(crate) post_update_count: i64,
-    /// Count of notes updated by the user.
-    pub(crate) note_update_count: i64,
-    /// If user is banned or not.
-    pub(crate) is_banned: bool,
-    /// Whether or not the user can approve posts.
-    pub(crate) can_approve_posts: bool,
-    /// Whether or not uploading posts affect the post limit.
-    pub(crate) can_upload_free: bool,
-    /// Whether or not uploading posts affects karma.
-    pub(crate) upload_karma_free: bool,
-    /// The string of the user's current level.
-    pub(crate) level_string: String,
-    /// Whether or not avatars should be shown.
-    pub(crate) show_avatars: Option<bool>,
-    /// Whether or not the blacklist should block avatars.
-    pub(crate) blacklist_avatars: Option<bool>,
-    /// Whether or not the blacklist should block users.
-    pub(crate) blacklist_users: Option<bool>,
-    /// Whether or not a post's description should be collapsed initially.
-    pub(crate) description_collapsed_initially: Option<bool>,
-    /// Whether or not comments should be hidden.
-    pub(crate) hide_comments: Option<bool>,
-    /// Whether or not hidden comments should be shown.
-    pub(crate) show_hidden_comments: Option<bool>,
-    /// Whether or not to show post statistics.
-    pub(crate) show_post_statistics: Option<bool>,
-    /// Whether or not the user has mail.
-    pub(crate) has_mail: Option<bool>,
-    /// Whether or not the user will receive email notifications.
-    pub(crate) receive_email_notifications: Option<bool>,
-    /// Whether or not keyboard navigation is on/off.
-    pub(crate) enable_keyboard_navigation: Option<bool>,
-    /// Whether or not privacy mode is enabled.
-    pub(crate) enable_privacy_mode: Option<bool>,
-    /// Whether or not usernames should be styled.
-    pub(crate) style_usernames: Option<bool>,
-    /// Whether auto complete should be on or off.
-    pub(crate) enable_auto_complete: Option<bool>,
-    /// Whether or not searches should be saved.
-    pub(crate) has_saved_searches: Option<bool>,
-    /// Whether or not thumbnails should be cropped.
-    pub(crate) disable_cropped_thumbnails: Option<bool>,
-    /// Whether or not mobile gestures should be on or off.
-    pub(crate) disable_mobile_gestures: Option<bool>,
-    /// Whether or not safe mode is on/off.
-    pub(crate) enable_safe_mode: Option<bool>,
-    /// Whether or not responsive mode is disabled.
-    pub(crate) disable_responsive_mode: Option<bool>,
-    /// Whether or not post tooltips is disabled.
-    pub(crate) disable_post_tooltips: Option<bool>,
-    /// Whether or not the user can't flag.
-    pub(crate) no_flagging: Option<bool>,
-    /// Whether or not the user can't give feedback.
-    pub(crate) no_feedback: Option<bool>,
-    /// Whether or not dmail is disabled.
-    pub(crate) disable_user_dmails: Option<bool>,
-    /// Whether or not compact uploader is enabled.
-    pub(crate) enable_compact_uploader: Option<bool>,
-    /// The time the pool was updated in the format of `YYYY-MM-DDTHH:MM:SS.MS+00:00`.
-    pub(crate) updated_at: Option<String>,
-    /// The user's email.
-    pub(crate) email: Option<String>,
-    /// The time the user was last logged in in the format of `YYYY-MM-DDTHH:MM:SS.MS+00:00`.
-    pub(crate) last_logged_in_at: Option<String>,
-    /// The time the last forum the user read in the format of `YYYY-MM-DDTHH:MM:SS.MS+00:00`.
-    pub(crate) last_forum_read_at: Option<String>,
-    /// Recent tags searched by the user.
-    pub(crate) recent_tags: Option<String>,
-    /// Comment threshold of the user.
-    pub(crate) comment_threshold: Option<i64>,
-    /// Default image size of the user.
-    pub(crate) default_image_size: Option<String>,
-    /// Favorite tags the user has.
-    pub(crate) favorite_tags: Option<String>,
     /// The user's blacklist tags.
     pub(crate) blacklisted_tags: Option<String>,
-    /// The time zone of the user.
-    pub(crate) time_zone: Option<String>,
-    /// The post count per page.
-    pub(crate) per_page: Option<i64>,
-    /// Custom style/theme of E6.
-    pub(crate) custom_style: Option<String>,
-    /// Count of all the user's favorites.
-    pub(crate) favorite_count: Option<i64>,
-    /// The API regen multiplier.
-    pub(crate) api_regen_multiplier: Option<i64>,
-    /// The API burst limit.
-    pub(crate) api_burst_limit: Option<i64>,
-    /// The remaining API limit.
-    pub(crate) remaining_api_limit: Option<i64>,
-    /// The statement given while being in timeout.
-    pub(crate) statement_timeout: Option<i64>,
-    /// The limit for how many times a user can favorite.
-    pub(crate) favorite_limit: Option<i64>,
-    /// The maximum tag query limit, the amount amount of tags a user can search.
-    pub(crate) tag_query_limit: Option<i64>,
 }

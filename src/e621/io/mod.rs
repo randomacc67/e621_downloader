@@ -57,6 +57,28 @@ impl Config {
         &self.naming_convention
     }
 
+    /// Returns true if the configured naming convention requires categorized tag arrays (`mode=extended`).
+    pub(crate) fn needs_categorized_tags(&self) -> bool {
+        if self.naming_convention.eq_ignore_ascii_case("md5")
+            || self.naming_convention.eq_ignore_ascii_case("id")
+        {
+            return false;
+        }
+
+        [
+            "{artist}",
+            "{contributor}",
+            "{characters}",
+            "{copyright}",
+            "{species}",
+            "{general}",
+            "{meta}",
+            "{lore}",
+        ]
+        .iter()
+        .any(|placeholder| self.naming_convention.contains(placeholder))
+    }
+
     /// Checks config and ensure it isn't missing.
     pub(crate) fn config_exists() -> bool {
         if !Path::new(CONFIG_NAME).exists() {
@@ -124,7 +146,7 @@ pub(crate) struct Login {
     /// Username of user.
     #[serde(rename = "Username", default)]
     username: String,
-    /// The password hash (also known as the API key) for the user.
+    /// The API key for the user.
     #[serde(rename = "APIKey", default)]
     api_key: String,
     /// Whether or not the user wishes to download their favorites.
@@ -143,7 +165,7 @@ impl Login {
         &self.username
     }
 
-    /// The password hash (also known as the API key) for the user.
+    /// The API key for the user.
     pub(crate) fn api_key(&self) -> &str {
         &self.api_key
     }
@@ -210,7 +232,7 @@ impl Login {
         Ok(login)
     }
 
-    /// Checks if the login user and password is empty.
+    /// Checks if the login username or API key is empty.
     pub(crate) fn is_empty(&self) -> bool {
         self.username.is_empty() || self.api_key.is_empty()
     }
@@ -229,11 +251,11 @@ impl Login {
         info!("The login file was created.");
         info!(
             "If you wish to use your Blacklist, \
-             be sure to give your username and API hash key."
+             be sure to give your username and an API key from e621 (/api_keys)."
         );
         info!(
-            "Do not give out your API hash unless you trust this software completely, \
-             always treat your API hash like your own password."
+            "Do not give out your API key unless you trust this software completely, \
+             always treat your API key like your own password."
         );
 
         Ok(())
